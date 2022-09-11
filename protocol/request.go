@@ -2,6 +2,8 @@ package protocol
 
 import (
 	"io"
+
+	"github.com/edte/erpc/codec"
 )
 
 // 请求报文格式：
@@ -17,11 +19,11 @@ type Request struct {
 	EncodeType string // body 编码方式
 	Body       []byte // body
 
-	request  interface{}
-	response interface{}
+	encode codec.Codec // 当前的 body encode 方式
+	body   interface{} // raw body type
 }
 
-func NewRequest(server string, req interface{}, rsp interface{}) *Request {
+func NewRequest(server string, body interface{}) *Request {
 	return &Request{
 		Magic:      defaultMagic,
 		Version:    Version,
@@ -30,65 +32,41 @@ func NewRequest(server string, req interface{}, rsp interface{}) *Request {
 		Sequence:   getSeq(),
 		EncodeType: defaultBodyCodec.String(),
 		Body:       make([]byte, 0),
-		request:    req,
-		response:   rsp,
+		encode:     defaultBodyCodec,
+		body:       body,
 	}
 }
 
-func (r *Request) Encode() (data []byte, err error) {
+func (r *Request) SetMagic(m int) {
+	r.Magic = m
+}
+
+func (r *Request) SetEncode(c codec.Type) {
+	r.encode = codec.Coder(c)
+}
+
+func (r *Request) SetBody(body interface{}) {
+	r.body = body
+}
+
+// 编码请求
+func (r *Request) EncodeTo(w io.Writer) (err error) {
 	// [step 1] 先序列化 body
-	r.Body, err = defaultBodyCodec.Marshal(r.request)
+	r.Body, err = r.encode.Marshal(r.body)
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	// [step 2] 然后序列化整个报文
-	return defaultCodec.Marshal(r)
+	return defaultCodec.MarshalTo(r, w)
 }
 
-func (r *Request) EncodeTo(w io.Writer) (err error) {
-	data, err := r.Encode()
-	if err != nil {
-		return
-	}
-
-	_, err = w.Write(data)
-
-	return
+// 解码 body
+func (r *Request) DecodeBody() (err error) {
+	return r.encode.Unmarshal(r.Body, r.body)
 }
 
-func (r *Request) Decode(data []byte) (err error) {
-	// [step 1] 先解码报文
-	if err = defaultCodec.Unmarshal(data, r); err != nil {
-		return
-	}
-
-	// [step 2] 再解码请求体
-	return defaultBodyCodec.Unmarshal(r.Body, r.request)
-}
-
+// 解码请求
 func (r *Request) DecodeFrom(f io.Reader) (err error) {
-	// [step 1] 先解码报文
-	if err = defaultCodec.UnmarshalFrom(f, r); err != nil {
-		return
-	}
-
-	// [step 2] 再解码请求体
-	return defaultBodyCodec.Unmarshal(r.Body, r.request)
-}
-
-func (r *Request) SetMagic() {
-
-}
-
-func (r *Request) SetVersion() {
-
-}
-
-func (r *Request) Request() interface{} {
-	return r.request
-}
-
-func (r *Request) Response() interface{} {
-	return r.response
+	return defaultCodec.UnmarshalFrom(f, r)
 }

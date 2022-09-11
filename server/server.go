@@ -76,17 +76,33 @@ func (s *Server) handle(conn net.Conn) {
 		// [step 2] 开连接上下文
 		c := transport.NewContext(&conn)
 
-		// [step 3] 读请求
+		// [step 3] 初始化上下文参数
+		c.SetResponseConn(protocol.NewResponse())
+
+		// [step 4] 读请求
 		if err := c.ReadRequest(); err != nil {
 			c.ResponseConn.SetStatus(protocol.StatusError)
 			c.SendResponse()
 			continue
 		}
 
-		// [step 4] 处理请求
-		c.HandleRequest(s.handleMap[c.RequestConn.Host].handler)
+		// [step 5] 获取处理 handler item
+		h := s.handleMap[c.RequestConn.Host]
 
-		// [step 5] 发送响应
+		// [step 6] 设置上下文参数 body
+		c.RequestConn.SetBody(h.req)
+		c.ResponseConn.SetBody(h.rsp)
+
+		// [step 7] 解析请求体
+		if err := c.ReadRequestBody(); err != nil {
+			c.ResponseConn.SetStatus(protocol.StatusError)
+			c.SendResponse()
+		}
+
+		// [step 8] 处理请求
+		c.HandleRequest(h.handler)
+
+		// [step 9] 发送响应
 		c.SendResponse()
 	}
 }

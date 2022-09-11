@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/edte/erpc/center"
+	"github.com/edte/erpc/protocol"
 	"github.com/edte/erpc/transport"
 )
 
@@ -35,15 +36,20 @@ func (c *Client) Call(server string, req interface{}, rsp interface{}) (err erro
 
 	// [step 3] 创建连接上下文
 	ctx := transport.NewContext(&conn)
+
+	// [step 4] 设置请求协议参数，以及其他上下文参数
 	ctx.Request = req
 	ctx.Response = rsp
+	ctx.RequestConn = protocol.NewRequest(server, req)
+	ctx.ResponseConn = &protocol.Response{}
+	ctx.ResponseConn.SetBody(rsp)
 
-	// [setp 4] 发送请求
+	// [setp 5] 发送请求
 	if err = ctx.SendRequest(); err != nil {
 		return
 	}
 
-	// [step 5] 读取响应
+	// [step 6] 读取响应
 	if err = ctx.ReadResponse(); err != nil {
 		return
 	}

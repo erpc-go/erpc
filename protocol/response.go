@@ -1,6 +1,10 @@
 package protocol
 
-import "io"
+import (
+	"io"
+
+	"github.com/edte/erpc/codec"
+)
 
 // 响应报文格式：
 // ---------------------------------------------------------
@@ -14,34 +18,39 @@ type Response struct {
 	EncodeType string // body 编码方式
 	Body       []byte // body 数据
 
-	req *Request
+	body   interface{} // raw body type
+	encode codec.Codec // body code type
 }
 
-func NewResponse(req *Request) *Response {
+func NewResponse() *Response {
 	return &Response{
 		Version:    Version,
 		Type:       int(MessageTypeResponse),
-		Sequence:   req.Sequence,
 		EncodeType: defaultBodyCodec.String(),
 		Body:       []byte{},
-		req:        req,
+		encode:     defaultBodyCodec,
 	}
 }
 
-func (r *Response) Encode() (data []byte, err error) {
-	// [step 1] 先序列化 body
-	r.Body, err = defaultBodyCodec.Marshal(r.req.response)
-	if err != nil {
-		return nil, err
-	}
+func (r *Response) SetRequence(seq int) {
+	r.Sequence = seq
+}
 
-	// [step 2] 然后序列化整个报文
-	return defaultCodec.Marshal(r)
+func (r *Response) SetBody(body interface{}) {
+	r.body = body
+}
+
+func (r *Response) SetStatus(s int) {
+	r.Status = s
+}
+
+func (r *Response) SetEncode(c codec.Type) {
+	r.encode = codec.Coder(c)
 }
 
 func (r *Response) EncodeTo(w io.Writer) (err error) {
 	// [step 1] 先序列化 body
-	r.Body, err = defaultBodyCodec.Marshal(r.req.response)
+	r.Body, err = r.encode.Marshal(r.body)
 	if err != nil {
 		return
 	}
@@ -50,42 +59,16 @@ func (r *Response) EncodeTo(w io.Writer) (err error) {
 	return defaultCodec.MarshalTo(r, w)
 }
 
-func (r *Response) Decode(data []byte) (err error) {
-	// [step 1] 先反序列化报文
-	if err = defaultCodec.Unmarshal(data, r); err != nil {
-		return
-	}
-
-	// [step 2] 然后反序列化 response
-	if err = defaultBodyCodec.Unmarshal(r.Body, r.req.response); err != nil {
-		return
-	}
-
-	return
-}
-
 func (r *Response) DecodeFrom(f io.Reader) (err error) {
 	// [step 1] 先反序列化报文
 	if err = defaultCodec.UnmarshalFrom(f, r); err != nil {
 		return
 	}
 
-	// [step 2] 然后反序列化 response
-	if err = defaultBodyCodec.Unmarshal(r.Body, r.req.response); err != nil {
+	// [step 2] 然后反序列化 body
+	if err = r.encode.Unmarshal(r.Body, r.body); err != nil {
 		return
 	}
 
 	return
-}
-
-func (r *Response) GetStatus() int {
-	return r.Status
-}
-
-func (r *Response) SetStatus(s int) {
-	r.Status = s
-}
-
-func (r *Request) SetBody(data []byte) {
-	r.Body = data
 }
