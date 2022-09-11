@@ -1,17 +1,22 @@
 package codec
 
+import (
+	"io"
+
+	"github.com/edte/erpc/codec/binary"
+	"github.com/edte/erpc/codec/gob"
+	"github.com/edte/erpc/codec/jce"
+	"github.com/edte/erpc/codec/json"
+	"github.com/edte/erpc/codec/pb"
+)
+
 // codec 接口
 type Codec interface {
 	Marshal(v any) ([]byte, error)
+	MarshalTo(v any, w io.Writer) error
 	Unmarshal(data []byte, v any) error
-}
-
-type Marshalr interface {
-	Marshal() (data []byte, err error)
-}
-
-type Unmarshaler interface {
-	Unmarshal(data []byte) error
+	UnmarshalFrom(r io.Reader, v any) error
+	String() string
 }
 
 type Type string
@@ -33,11 +38,11 @@ var (
 )
 
 func init() {
-	coderMap[CodeTypeBinary] = NewBinaryCoder()
-	coderMap[CodeTypeGob] = NewGobCoder()
-	coderMap[CodeTypeJce] = NewJceCoder()
-	coderMap[CodeTypeJson] = NewJsonCoder()
-	coderMap[CodeTypePb] = NewPbCoder()
+	coderMap[CodeTypeBinary] = binary.DefaultCoder
+	coderMap[CodeTypeGob] = gob.DefaultCoder
+	coderMap[CodeTypeJce] = jce.DefaultCoder
+	coderMap[CodeTypeJson] = json.DefaultCoder
+	coderMap[CodeTypePb] = pb.DefaultCoder
 }
 
 // 根据类型获取编码器

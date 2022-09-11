@@ -1,19 +1,32 @@
 package main
 
-import "github.com/edte/erpc/server"
+import (
+	"fmt"
 
-func hanleHello(c *server.Context) {
-	req := c.Request
-	rsp := c.Response
+	"github.com/edte/erpc"
+	"github.com/edte/erpc/transport"
+	"github.com/edte/testpb2go/echo"
+	"github.com/edte/testpb2go/hello"
+)
 
+func hanleHello(c *transport.Context) {
+	req := c.Request.(*hello.HelloRequest)
+	rsp := c.Response.(*hello.HelloResponse)
+
+	req.Msg = "hello"
+	fmt.Println(rsp.Msg)
 }
 
-func hanleEcho(c *server.Context) {
+func hanleEcho(c *transport.Context) {
+	req := c.Request.(*echo.EchoRequest)
+	rsp := c.Response.(*echo.EchoResponse)
 
+	req.Msg = "hello"
+	fmt.Println(rsp.Msg)
 }
 
 func main() {
-	server.Handle("hello", hanleHello)
-	server.Handle("echo", hanleEcho)
-	server.Listen(":8080")
+	erpc.Handle("hello", hanleHello, &hello.HelloRequest{}, &hello.HelloResponse{})
+	erpc.Handle("echo", hanleEcho, &echo.EchoRequest{}, &echo.EchoResponse{})
+	erpc.Listen(":8080")
 }

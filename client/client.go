@@ -1,55 +1,52 @@
 package client
 
 import (
-	"github.com/edte/erpc/codec"
+	"time"
+
+	"github.com/edte/erpc/center"
 	"github.com/edte/erpc/transport"
 )
 
-const (
-	defaultMagic = 0x3bef5c
-)
-
-var (
-	defaultCodec = codec.NewPbCoder()
-)
-
 type Client struct {
-	trans       transport.Transporter
-	MagicNumber int
-	CodecType   codec.Codec // body codec type
+	pooler         transport.Pooler // 底层连接池
+	ConnectTimeout time.Duration    // 连接超时设置
 }
 
-func NewClient(opts ...Option) *Client {
-	o := &clientOption{}
-
+func NewClient() *Client {
 	c := &Client{
-		trans:       nil,
-		MagicNumber: defaultMagic,
-		CodecType:   defaultCodec,
+		pooler: &transport.ConnectionPool{},
 	}
-
-	for _, opt := range opts {
-		opt(o)
-	}
-
 	return c
 }
 
-func (c *Client) Call(addr string, req interface{}, rsp interface{}) error {
-	r := NewRequest(addr, req, rsp)
-	c.Do(r)
-	return nil
-}
+// TODO: 请求超时设置
+func (c *Client) Call(server string, req interface{}, rsp interface{}) (err error) {
+	// [step 1] 先服务发现取目标 ip:port
+	addr, err := center.Discovery(server)
+	if err != nil {
+		return
+	}
 
-func (c *Client) Do(req *Request) (Rsp *Response) {
-	c.send()
-	return nil
-}
+	// [step 2] 然后从连接池中取一个连接
+	conn, err := c.pooler.GetConn(addr)
+	if err != nil {
+		return
+	}
 
-func (c *Client) send() {
-	c.trans.Transport(nil)
-}
+	// [step 3] 创建连接上下文
+	ctx := transport.NewContext(&conn)
+	ctx.Request = req
+	ctx.Response = rsp
 
-func (c *Client) transport() transport.Transporter {
-	return c.trans
+	// [setp 4] 发送请求
+	if err = ctx.SendRequest(); err != nil {
+		return
+	}
+
+	// [step 5] 读取响应
+	if err = ctx.ReadResponse(); err != nil {
+		return
+	}
+
+	return
 }
