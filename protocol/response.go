@@ -4,6 +4,7 @@ import (
 	"io"
 
 	"github.com/edte/erpc/codec"
+	"github.com/edte/erpc/log"
 )
 
 // 响应报文格式：
@@ -26,9 +27,9 @@ func NewResponse() *Response {
 	return &Response{
 		Version:    Version,
 		Type:       int(MessageTypeResponse),
-		EncodeType: defaultBodyCodec.String(),
+		EncodeType: DefaultBodyCodec.String(),
 		Body:       []byte{},
-		encode:     defaultBodyCodec,
+		encode:     DefaultBodyCodec,
 	}
 }
 
@@ -44,31 +45,48 @@ func (r *Response) SetStatus(s int) {
 	r.Status = s
 }
 
-func (r *Response) SetEncode(c codec.Type) {
-	r.encode = codec.Coder(c)
+func (r *Response) SetEncode(c codec.Codec) {
+	r.encode = c
 }
 
 func (r *Response) EncodeTo(w io.Writer) (err error) {
-	// [step 1] 先序列化 body
+	log.Debugf("begin encode response to write")
+
+	// [step 1]  如果 body 为空，则直接序列化报文
+	if r.body == nil {
+		log.Errorf("marshal response body to write failed, error:%s", err)
+		return DefaultCodec.MarshalTo(r, w)
+	}
+
+	log.Debugf("begin encode response body to write succ")
+
+	// [step 2] 先序列化 body
 	r.Body, err = r.encode.Marshal(r.body)
 	if err != nil {
+		log.Errorf("marshal response body to write failed, error:%s", err)
 		return
 	}
 
-	// [step 2] 然后序列化整个报文
-	return defaultCodec.MarshalTo(r, w)
+	// [step 3] 然后序列化整个报文
+	return DefaultCodec.MarshalTo(r, w)
 }
 
 func (r *Response) DecodeFrom(f io.Reader) (err error) {
+	log.Debugf("begin decode response from reader")
+
 	// [step 1] 先反序列化报文
-	if err = defaultCodec.UnmarshalFrom(f, r); err != nil {
+	if err = DefaultCodec.UnmarshalFrom(f, r); err != nil {
+		log.Errorf("unmarshal response form reader failed, error:%s", err)
 		return
 	}
 
 	// [step 2] 然后反序列化 body
 	if err = r.encode.Unmarshal(r.Body, r.body); err != nil {
+		log.Errorf("unmarshal response body form reader failed, error:%s", err)
 		return
 	}
+
+	log.Debugf("decode response from reader succ")
 
 	return
 }

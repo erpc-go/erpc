@@ -7,6 +7,6 @@ const (
 )
 
 var (
-	defaultBodyCodec codec.Codec = codec.Coder(codec.CodeTypeGob)
-	defaultCodec     codec.Codec = codec.Coder(codec.CodeTypePb)
+	DefaultBodyCodec codec.Codec = codec.Coder(codec.CodeTypePb)
+	DefaultCodec     codec.Codec = codec.Coder(codec.CodeTypeGob)
 )

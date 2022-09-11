@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/edte/erpc/log"
 	ping2 "github.com/go-ping/ping"
 )
 
@@ -64,21 +65,30 @@ func newFuncItem(name string, req interface{}, rsp interface{}) *funcItem {
 }
 
 func (c *Center) register(server string, addr string, request interface{}, response interface{}) (err error) {
+	log.Debugf("begin split server, server:%s", server)
+
 	// [step 1]  分割 server，格式为 servername.funcname,如果不满足则失败
 	s := strings.Split(server, ".")
 	if len(s) != 2 {
-		return errors.New("invalid server")
+		return errors.New("invalid server:" + server)
 	}
 
 	// alias 下，方便编写
 	serverName := s[0]
 	funcName := s[1]
 
+	log.Debugf("split server %s succ, servername:%s, funcName:%s", serverName, funcName)
+
 	// [step 2] 建立 func item
 	fi := newFuncItem(funcName, request, response)
 
+	log.Debugf("begin judge server %s has registe", serverName)
+
 	// [step 3] 如果 server 已经注册过
 	if oldServer, ok := c.serverInfo[serverName]; ok {
+		log.Debugf("server %s has registerd", serverName)
+		log.Debugf("begin regise serve %s's func %s", serverName, funcName)
+
 		// [step 3.1] 增加 server 地址
 		oldServer.addr = append(oldServer.addr, addr)
 
@@ -87,8 +97,13 @@ func (c *Center) register(server string, addr string, request interface{}, respo
 			oldServer.funcsList = append(oldServer.funcsList, fi)
 			oldServer.funcs[funcName] = fi
 		}
+
+		log.Debugf("server %s registe succ", server)
+
 		return
 	}
+
+	log.Debugf("begin registe server %s", server)
 
 	// [step 4] 如果 server 没有注册过,则注册 server
 	si := newServerItem(serverName, addr, funcName, fi)
@@ -96,17 +111,24 @@ func (c *Center) register(server string, addr string, request interface{}, respo
 	c.serverList = append(c.serverList, si)
 	c.serverInfo[serverName] = si
 
+	log.Debugf("server %s registe succ", server)
+
 	return nil
 }
 
 func (c *Center) discovery(server string) (addr string, err error) {
+	log.Debugf("begin discovey server %s", server)
+
 	// [step 1] 先从 server map 里取 server， 如果不存在则返回
 	si, ok := c.serverInfo[server]
 	if !ok {
+		log.Errorf("serve %s discover failed, err:%s", server, "server not register")
 		return "", errors.New("server not register")
 	}
+
 	// [step 2] 如果 server 部署的服务器为空，则返回
 	if len(si.addr) == 0 {
+		log.Errorf("server %s discover failed, ip is empty", server)
 		return "", errors.New("server's address list is empty")
 	}
 
@@ -117,8 +139,12 @@ func (c *Center) discovery(server string) (addr string, err error) {
 func (c *Center) banlance(addrs []string) (addr string, err error) {
 	// TODO: 负载均衡这里需要扩展，暂时随机返回一个即可
 
+	log.Debugf("begin select a ip by banlance,addrs:%v", addrs)
+
 	r := rand.New(rand.NewSource(time.Now().Unix()))
 	i := r.Intn(len(addrs))
+
+	log.Debugf("select ip succ, res:%s", addrs[i])
 
 	return addrs[i], nil
 }
@@ -127,8 +153,12 @@ func (c *Center) banlance(addrs []string) (addr string, err error) {
 // 再扫描无效 server list，如果没问题，则放入正常 server list
 // TODO: ping 命令这里暂时用库，以后自己实现
 func ping() {
+	log.Debugf("begin ping")
+
 	// 临时的重新有效 list
 	tmp := make([]*serverItem, 0)
+
+	log.Debugf("begin scan invalidServerList")
 
 	// [step 1] 扫描失效 server list
 	for i, is := range defaultCenter.invalidServerList {
@@ -147,6 +177,8 @@ func ping() {
 			}
 		}
 	}
+
+	log.Debugf("begin scan server list")
 
 	// [step 2] 扫描有效 server list
 	for i, is := range defaultCenter.serverList {
@@ -167,22 +199,24 @@ func ping() {
 		}
 	}
 
+	log.Debugf("begin generate new server list, invalidServerList:%v", tmp)
+
 	// [step 3] 把重新有效的 server 放入到有效 list 中
 	for _, is := range tmp {
 		defaultCenter.serverList = append(defaultCenter.serverList, is)
 		defaultCenter.serverInfo[is.name] = is
 	}
+
+	log.Debugf("ping finished")
 }
 
-func init() {
+func Ping() {
 	// 周期 ping server
-	go func() {
-		for {
-			t := time.NewTicker(time.Second)
-			select {
-			case <-t.C:
-				ping()
-			}
+	for {
+		t := time.NewTicker(time.Second)
+		select {
+		case <-t.C:
+			ping()
 		}
-	}()
+	}
 }

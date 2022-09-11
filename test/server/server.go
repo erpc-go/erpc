@@ -9,24 +9,24 @@ import (
 	"github.com/edte/testpb2go/hello"
 )
 
-func hanleHello(c *transport.Context) {
-	req := c.Request.(*hello.HelloRequest)
+func handleHello(c *transport.Context) {
 	rsp := c.Response.(*hello.HelloResponse)
 
-	req.Msg = "hello"
+	rsp.Msg = "hello world"
 	fmt.Println(rsp.Msg)
 }
 
-func hanleEcho(c *transport.Context) {
+func handleEcho(c *transport.Context) {
 	req := c.Request.(*echo.EchoRequest)
 	rsp := c.Response.(*echo.EchoResponse)
 
-	req.Msg = "hello"
+	rsp.Msg = req.Msg
+
 	fmt.Println(rsp.Msg)
 }
 
 func main() {
-	erpc.Handle("hello", hanleHello, &hello.HelloRequest{}, &hello.HelloResponse{})
-	erpc.Handle("echo", hanleEcho, &echo.EchoRequest{}, &echo.EchoResponse{})
-	erpc.Listen(":8080")
+	erpc.Handle("demo.hello", handleHello, &hello.HelloRequest{}, &hello.HelloResponse{})
+	erpc.Handle("demo.echo", handleEcho, &echo.EchoRequest{}, &echo.EchoResponse{})
+	erpc.Listen(":8877")
 }

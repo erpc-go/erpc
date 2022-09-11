@@ -19,7 +19,9 @@ type Context struct {
 
 func NewContext(c *net.Conn) *Context {
 	return &Context{
-		conn: c,
+		RequestConn:  &protocol.Request{},
+		ResponseConn: &protocol.Response{},
+		conn:         c,
 	}
 }
 
