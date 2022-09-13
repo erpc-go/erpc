@@ -11,6 +11,11 @@ import (
 	"github.com/edte/erpc/transport"
 )
 
+type CallRes struct {
+	Done chan struct{}
+	Err  error
+}
+
 type Client struct {
 	pooler         transport.Pooler // 底层连接池
 	ConnectTimeout time.Duration    // 连接超时设置
@@ -18,19 +23,27 @@ type Client struct {
 
 func NewClient() *Client {
 	c := &Client{
-		pooler: &transport.ConnectionPool{},
+		pooler: transport.NewConnectionPool(),
 	}
 	return c
 }
 
-// TODO: 请求超时设置
-func (c *Client) Call(server string, req interface{}, rsp interface{}) (err error) {
+func (c *Client) Call(server string, req interface{}, rsp interface{}, res *CallRes) {
+	var err error
+
+	defer func() {
+		res.Err = err
+		res.Done <- struct{}{}
+		return
+	}()
+
 	log.Debugf("begin call server %s", server)
 
 	// [step 1]  分割 server，格式为 servername.funcname,如果不满足则失败
 	s := strings.Split(server, ".")
 	if len(s) != 2 {
-		return errors.New("invalid server")
+		err = errors.New("invalid server")
+		return
 	}
 
 	// alias 下，方便编写
@@ -50,6 +63,7 @@ func (c *Client) Call(server string, req interface{}, rsp interface{}) (err erro
 	// [step 3] 然后从连接池中取一个连接
 	conn, err := c.pooler.GetConn(addr)
 	if err != nil {
+		log.Errorf("get conn addr %s failed, err:%s", addr, err)
 		return
 	}
 
@@ -76,5 +90,9 @@ func (c *Client) Call(server string, req interface{}, rsp interface{}) (err erro
 	log.Debugf("begin read response, server:%s", server)
 
 	// [step 7] 读取响应
-	return ctx.ReadResponse()
+	err = ctx.ReadResponse()
+
+	log.Debugf("call server %s succ", server)
+
+	return
 }

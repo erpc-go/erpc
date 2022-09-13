@@ -21,6 +21,7 @@ const (
 
 var (
 	logLevel LogLevel = ErrorLevel
+	// logLevel LogLevel = DebugLevel
 )
 
 func SetLogLevel(l LogLevel) {
