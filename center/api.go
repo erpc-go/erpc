@@ -16,25 +16,18 @@ var (
 )
 
 type ResigerArg struct {
-	Server   string
-	Addr     string
-	Request  interface{}
-	Response interface{}
+	Server    string
+	Addr      string
+	Functions []string
 }
+
+// TODO: 这里同时提供 http、rpc 两种与服务中心交付的方式（哪种兜底？）
+// TODO: 再考虑本地服务缓存提供服务发现、服务注册功能？（去注册中心化？考虑优化）
 
 // 服务注册
 // 一台机器向注册中心发送本地地址、注册的服务和接口，以及接口的参数、返回值
-// TODO: 这里考虑优化：把一个 server 的所有 func 一次性请求过来注册？
-// 这里注册中心主要存 req、rsp type 吗？有必要吗？
-func Register(server string, addr string, request interface{}, response interface{}) (err error) {
-	r := &ResigerArg{
-		Server:   server,
-		Addr:     addr,
-		Request:  request,
-		Response: response,
-	}
-
-	b, err := json.Marshal(r)
+func Register(arg ResigerArg) (err error) {
+	b, err := json.Marshal(arg)
 	if err != nil {
 		return
 	}
@@ -103,7 +96,7 @@ func Listen(addr string) {
 			return
 		}
 
-		if err := defaultCenter.register(r.Server, r.Addr, r.Request, r.Response); err != nil {
+		if err := defaultCenter.register(r.Server, r.Addr, r.Functions); err != nil {
 			log.Errorf("registe failed, err:%s", err)
 			ctx.String(500, err.Error())
 			return
@@ -112,7 +105,7 @@ func Listen(addr string) {
 		log.Debugf("register %s succ", r.Server)
 	})
 
-	go Ping()
+	go BeginPing()
 
 	r.Run()
 }

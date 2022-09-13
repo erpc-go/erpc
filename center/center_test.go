@@ -3,10 +3,6 @@ package center
 import (
 	"fmt"
 	"testing"
-
-	"github.com/edte/testpb2go/echo"
-	"github.com/edte/testpb2go/hello"
-	ping3 "github.com/edte/testpb2go/ping"
 )
 
 func show() {
@@ -16,36 +12,20 @@ func show() {
 }
 
 func TestP(t *testing.T) {
-	if err := Register("demo.ping", "127.0.0.1:8080", ping3.PingRequest{}, ping3.PingResponse{}); err != nil {
+	if err := defaultCenter.register("demo", "127.0.0.1:8080", []string{"ping,echo"}); err != nil {
 		panic(err)
 	}
 
-	if err := Register("demo.ping", "127.0.0.1:134", ping3.PingRequest{}, ping3.PingResponse{}); err != nil {
+	if err := defaultCenter.register("demo", "127.0.0.1:5533", []string{"ping,echo"}); err != nil {
 		panic(err)
 	}
 
-	if err := Register("demo.ping", "127.0.0.1:9999", ping3.PingRequest{}, ping3.PingResponse{}); err != nil {
+	if err := defaultCenter.register("hello", "127.0.0.1:5533", []string{"hello"}); err != nil {
 		panic(err)
 	}
 
-	if err := Register("demo.echo", "127.0.0.1:8888", echo.EchoRequest{}, echo.EchoResponse{}); err != nil {
-		panic(err)
-	}
+	show()
 
-	if err := Register("demo.echo", "127.0.0.1:7777", echo.EchoRequest{}, echo.EchoResponse{}); err != nil {
-		panic(err)
-	}
-
-	if err := Register("hello.hello", "127.0.0.1:235", hello.HelloRequest{}, hello.HelloResponse{}); err != nil {
-		panic(err)
-	}
-
-	if err := Register("hello.hello", "127.0.0.1:1111", hello.HelloRequest{}, hello.HelloResponse{}); err != nil {
-		panic(err)
-	}
-
-	// show()
-
-	fmt.Println(Discovery("demo"))
-	fmt.Println(Discovery("hello"))
+	fmt.Println(defaultCenter.discovery("demo"))
+	fmt.Println(defaultCenter.discovery("hello"))
 }
