@@ -95,6 +95,7 @@ func (s *Server) Listen(addr string) {
 
 		log.Debugf("server %s accept a new client:%s", addr, c.RemoteAddr())
 
+		// TODO: 这里考虑优化掉，当连接断开后，协程也关闭，而不是继续循环
 		go s.handle(c)
 	}
 }
