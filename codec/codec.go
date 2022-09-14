@@ -11,6 +11,7 @@ import (
 )
 
 // codec 接口
+// TODO: 这里考虑重新设计接口, 内部加缓存？
 type Codec interface {
 	Marshal(v any) ([]byte, error)
 	MarshalTo(v any, w io.Writer) error

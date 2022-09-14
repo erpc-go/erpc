@@ -1,0 +1,146 @@
+2022/09/14 17:18:54 [DEBUG] handles:map[discovery:{discovery 0x627ea0 0xc00009f7a0 0xc0000c74c0} heateat:{heateat 0x6285a0 0xc0000b8190 0xc00009f800} register:{register 0x6282e0 0xc0000b6180 0xc00009f7d0}]
+2022/09/14 17:18:54 [INFO] addr:127.0.0.1:8081 listen succ
+2022/09/14 17:18:54 [DEBUG] center begin update server
+2022/09/14 17:18:55 [DEBUG] server 127.0.0.1:8081 accept a new client:127.0.0.1:46422
+2022/09/14 17:18:55 [DEBUG] center recive a new request
+2022/09/14 17:18:55 [DEBUG] center begin init context
+2022/09/14 17:18:55 [DEBUG] first center context raw:&{0xc00007a080 0xc000184000 <nil> <nil> 0xc000014010}
+2022/09/14 17:18:55 [DEBUG] center begin read request
+2022/09/14 17:18:55 [DEBUG] begin decode request from reader
+2022/09/14 17:18:55 [DEBUG] center begin get handler, request:&{3927900 v0.1 center.register 2 885512 pb [10 4 100 101 109 111 18 9 91 58 58 93 58 56 56 55 55 26 5 104 101 108 108 111 26 4 101 99 104 111] 0x8cdc08 <nil>}
+2022/09/14 17:18:55 [DEBUG] get serve center.register handler
+2022/09/14 17:18:55 [DEBUG] get handler,name :register,handles raw :map[discovery:{discovery 0x627ea0 0xc00009f7a0 0xc0000c74c0} heateat:{heateat 0x6285a0 0xc0000b8190 0xc00009f800} register:{register 0x6282e0 0xc0000b6180 0xc00009f7d0}]
+2022/09/14 17:18:55 [DEBUG] center.register s'handler :{register 0x6282e0 0xc0000b6180 0xc00009f7d0}
+2022/09/14 17:18:55 [DEBUG] second center context raw:&{0xc00007a080 0xc000184070   0xc000014010}
+2022/09/14 17:18:55 [DEBUG] center begin read request body
+2022/09/14 17:18:55 [DEBUG] begin decode request:&{3927900 v0.1 center.register 2 885512 pb [10 4 100 101 109 111 18 9 91 58 58 93 58 56 56 55 55 26 5 104 101 108 108 111 26 4 101 99 104 111] 0x8cdc08 0xc0000b6180}
+2022/09/14 17:18:55 [DEBUG] decode request body succ, body:serverName:"demo" addr:"[::]:8877" functions:"hello" functions:"echo" 
+2022/09/14 17:18:55 [DEBUG] center begin handle request
+2022/09/14 17:18:55 [DEBUG] center begin deal rpc register
+2022/09/14 17:18:55 [DEBUG] center begin registe sever:demo
+2022/09/14 17:18:55 [DEBUG] server demo has not registerd, begin regise to center
+2022/09/14 17:18:55 [DEBUG] server demo begin regise funcs,funcs:[hello echo]
+2022/09/14 17:18:55 [DEBUG] serve demo begin registe addr, addr:[::]:8877,funcs:[hello echo]
+2022/09/14 17:18:55 [DEBUG] serve demo begin registe funcs
+2022/09/14 17:18:55 [DEBUG] serve demo registe succ,data:{demo map[[::]:8877:0xc0000d0420] map[echo:true hello:true]}
+2022/09/14 17:18:55 [DEBUG] center server demo registe succ
+2022/09/14 17:18:55 [DEBUG] center register demo succ
+2022/09/14 17:18:55 [DEBUG] center begin send response
+2022/09/14 17:18:55 [DEBUG] begin encode response to write
+2022/09/14 17:18:55 [DEBUG] begin encode response body to write succ
+2022/09/14 17:18:55 [DEBUG] center send response succ
+2022/09/14 17:18:55 [DEBUG] center recive a new request
+2022/09/14 17:18:55 [DEBUG] center begin init context
+2022/09/14 17:18:55 [DEBUG] first center context raw:&{0xc000156480 0xc0000c8e00 <nil> <nil> 0xc000014010}
+2022/09/14 17:18:55 [DEBUG] center begin read request
+2022/09/14 17:18:55 [DEBUG] begin decode request from reader
+2022/09/14 17:18:55 [DEBUG] center begin update addr, raw:map[[::]:8877:0xc0000d0420]
+2022/09/14 17:18:55 [DEBUG] center addr [::]:8877 lasttime:2022-09-14 17:18:55.223 +0800 CST, now:2022-09-14 17:18:55.2845895 +0800 CST m=+1.004802101, distance 61.5895ms, 
+2022/09/14 17:18:55 [DEBUG] center update server succ
+2022/09/14 17:18:55 [DEBUG] center begin update server
+2022/09/14 17:18:56 [DEBUG] center begin get handler, request:&{3927900 v0.1 center.heateat 2 885513 pb [8 221 169 173 218 179 48 18 4 100 101 109 111 26 9 91 58 58 93 58 56 56 55 55] 0x8cdc08 <nil>}
+2022/09/14 17:18:56 [DEBUG] get serve center.heateat handler
+2022/09/14 17:18:56 [DEBUG] get handler,name :heateat,handles raw :map[discovery:{discovery 0x627ea0 0xc00009f7a0 0xc0000c74c0} heateat:{heateat 0x6285a0 0xc0000b8190 0xc00009f800} register:{register 0x6282e0 0xc0000b6180 0xc00009f7d0}]
+2022/09/14 17:18:56 [DEBUG] center.heateat s'handler :{heateat 0x6285a0 0xc0000b8190 0xc00009f800}
+2022/09/14 17:18:56 [DEBUG] second center context raw:&{0xc000156480 0xc0000c8e70   0xc000014010}
+2022/09/14 17:18:56 [DEBUG] center begin read request body
+2022/09/14 17:18:56 [DEBUG] begin decode request:&{3927900 v0.1 center.heateat 2 885513 pb [8 221 169 173 218 179 48 18 4 100 101 109 111 26 9 91 58 58 93 58 56 56 55 55] 0x8cdc08 0xc0000b8190}
+2022/09/14 17:18:56 [DEBUG] decode request body succ, body:sendTime:1663147136221 serverName:"demo" addr:"[::]:8877" 
+2022/09/14 17:18:56 [DEBUG] center begin handle request
+2022/09/14 17:18:56 [DEBUG] center begin send response
+2022/09/14 17:18:56 [DEBUG] begin encode response to write
+2022/09/14 17:18:56 [DEBUG] begin encode response body to write succ
+2022/09/14 17:18:56 [DEBUG] center send response succ
+2022/09/14 17:18:56 [DEBUG] center recive a new request
+2022/09/14 17:18:56 [DEBUG] center begin init context
+2022/09/14 17:18:56 [DEBUG] first center context raw:&{0xc00007a500 0xc0001848c0 <nil> <nil> 0xc000014010}
+2022/09/14 17:18:56 [DEBUG] center begin read request
+2022/09/14 17:18:56 [DEBUG] begin decode request from reader
+2022/09/14 17:18:56 [DEBUG] center begin update addr, raw:map[[::]:8877:0xc0000d0420]
+2022/09/14 17:18:56 [DEBUG] center addr [::]:8877 lasttime:2022-09-14 17:18:56.221 +0800 CST, now:2022-09-14 17:18:56.2859112 +0800 CST m=+2.006123801, distance 64.9112ms, 
+2022/09/14 17:18:56 [DEBUG] center update server succ
+2022/09/14 17:18:56 [DEBUG] center begin update server
+2022/09/14 17:18:57 [DEBUG] center begin get handler, request:&{3927900 v0.1 center.heateat 2 885514 pb [8 200 177 173 218 179 48 18 4 100 101 109 111 26 9 91 58 58 93 58 56 56 55 55] 0x8cdc08 <nil>}
+2022/09/14 17:18:57 [DEBUG] get serve center.heateat handler
+2022/09/14 17:18:57 [DEBUG] get handler,name :heateat,handles raw :map[discovery:{discovery 0x627ea0 0xc00009f7a0 0xc0000c74c0} heateat:{heateat 0x6285a0 0xc0000b8190 0xc00009f800} register:{register 0x6282e0 0xc0000b6180 0xc00009f7d0}]
+2022/09/14 17:18:57 [DEBUG] center.heateat s'handler :{heateat 0x6285a0 0xc0000b8190 0xc00009f800}
+2022/09/14 17:18:57 [DEBUG] second center context raw:&{0xc00007a500 0xc000184930 sendTime:1663147136221 serverName:"demo" addr:"[::]:8877"  responseTime:1663147136222723700  0xc000014010}
+2022/09/14 17:18:57 [DEBUG] center begin read request body
+2022/09/14 17:18:57 [DEBUG] begin decode request:&{3927900 v0.1 center.heateat 2 885514 pb [8 200 177 173 218 179 48 18 4 100 101 109 111 26 9 91 58 58 93 58 56 56 55 55] 0x8cdc08 0xc0000b8190}
+2022/09/14 17:18:57 [DEBUG] decode request body succ, body:sendTime:1663147137224 serverName:"demo" addr:"[::]:8877" 
+2022/09/14 17:18:57 [DEBUG] center begin handle request
+2022/09/14 17:18:57 [DEBUG] center begin send response
+2022/09/14 17:18:57 [DEBUG] begin encode response to write
+2022/09/14 17:18:57 [DEBUG] begin encode response body to write succ
+2022/09/14 17:18:57 [DEBUG] center send response succ
+2022/09/14 17:18:57 [DEBUG] center recive a new request
+2022/09/14 17:18:57 [DEBUG] center begin init context
+2022/09/14 17:18:57 [DEBUG] first center context raw:&{0xc000156680 0xc0000c9500 <nil> <nil> 0xc000014010}
+2022/09/14 17:18:57 [DEBUG] center begin read request
+2022/09/14 17:18:57 [DEBUG] begin decode request from reader
+2022/09/14 17:18:57 [DEBUG] center begin update addr, raw:map[[::]:8877:0xc0000d0420]
+2022/09/14 17:18:57 [DEBUG] center addr [::]:8877 lasttime:2022-09-14 17:18:57.224 +0800 CST, now:2022-09-14 17:18:57.2870415 +0800 CST m=+3.007254001, distance 63.0415ms, 
+2022/09/14 17:18:57 [DEBUG] center update server succ
+2022/09/14 17:18:57 [DEBUG] center begin update server
+2022/09/14 17:18:57 [DEBUG] server 127.0.0.1:8081 accept a new client:127.0.0.1:46424
+2022/09/14 17:18:57 [DEBUG] center recive a new request
+2022/09/14 17:18:57 [DEBUG] center begin init context
+2022/09/14 17:18:57 [DEBUG] first center context raw:&{0xc00007a700 0xc0001849a0 <nil> <nil> 0xc000014168}
+2022/09/14 17:18:57 [DEBUG] center begin read request
+2022/09/14 17:18:57 [DEBUG] begin decode request from reader
+2022/09/14 17:18:57 [DEBUG] center begin get handler, request:&{3927900 v0.1 center.discovery 2 885513 pb [10 4 100 101 109 111] 0x8cdc08 <nil>}
+2022/09/14 17:18:57 [DEBUG] get serve center.discovery handler
+2022/09/14 17:18:57 [DEBUG] get handler,name :discovery,handles raw :map[discovery:{discovery 0x627ea0 0xc00009f7a0 0xc0000c74c0} heateat:{heateat 0x6285a0 0xc0000b8190 0xc00009f800} register:{register 0x6282e0 0xc0000b6180 0xc00009f7d0}]
+2022/09/14 17:18:57 [DEBUG] center.discovery s'handler :{discovery 0x627ea0 0xc00009f7a0 0xc0000c74c0}
+2022/09/14 17:18:57 [DEBUG] second center context raw:&{0xc00007a700 0xc000184a10   0xc000014168}
+2022/09/14 17:18:57 [DEBUG] center begin read request body
+2022/09/14 17:18:57 [DEBUG] begin decode request:&{3927900 v0.1 center.discovery 2 885513 pb [10 4 100 101 109 111] 0x8cdc08 0xc00009f7a0}
+2022/09/14 17:18:57 [DEBUG] decode request body succ, body:server:"demo" 
+2022/09/14 17:18:57 [DEBUG] center begin handle request
+2022/09/14 17:18:57 [DEBUG] center begin recevie discover demo
+2022/09/14 17:18:57 [DEBUG] center begin send response
+2022/09/14 17:18:57 [DEBUG] begin encode response to write
+2022/09/14 17:18:57 [DEBUG] begin encode response body to write succ
+2022/09/14 17:18:57 [DEBUG] center send response succ
+2022/09/14 17:18:57 [DEBUG] center recive a new request
+2022/09/14 17:18:57 [DEBUG] center begin init context
+2022/09/14 17:18:57 [DEBUG] first center context raw:&{0xc00007aa80 0xc000185260 <nil> <nil> 0xc000014168}
+2022/09/14 17:18:57 [DEBUG] center begin read request
+2022/09/14 17:18:57 [DEBUG] begin decode request from reader
+2022/09/14 17:18:57 [DEBUG] center recive a new request
+2022/09/14 17:18:57 [DEBUG] center begin init context
+2022/09/14 17:18:57 [DEBUG] first center context raw:&{0xc00007ab80 0xc000185340 <nil> <nil> 0xc000014168}
+2022/09/14 17:18:57 [DEBUG] center begin read request
+2022/09/14 17:18:57 [DEBUG] begin decode request from reader
+2022/09/14 17:18:57 [DEBUG] center recive a new request
+2022/09/14 17:18:57 [DEBUG] center begin init context
+2022/09/14 17:18:57 [DEBUG] first center context raw:&{0xc00007ac80 0xc000185420 <nil> <nil> 0xc000014168}
+2022/09/14 17:18:57 [DEBUG] center begin read request
+2022/09/14 17:18:57 [DEBUG] begin decode request from reader
+2022/09/14 17:18:57 [DEBUG] center recive a new request
+2022/09/14 17:18:57 [DEBUG] center begin init context
+2022/09/14 17:18:57 [DEBUG] first center context raw:&{0xc00007ad80 0xc000185500 <nil> <nil> 0xc000014168}
+2022/09/14 17:18:57 [DEBUG] center begin read request
+2022/09/14 17:18:57 [DEBUG] begin decode request from reader
+2022/09/14 17:18:57 [DEBUG] center recive a new request
+2022/09/14 17:18:57 [DEBUG] center begin init context
+2022/09/14 17:18:57 [DEBUG] first center context raw:&{0xc00007ae80 0xc0001855e0 <nil> <nil> 0xc000014168}
+2022/09/14 17:18:57 [DEBUG] center begin read request
+2022/09/14 17:18:57 [DEBUG] begin decode request from reader
+2022/09/14 17:18:57 [DEBUG] center recive a new request
+2022/09/14 17:18:57 [DEBUG] center begin init context
+2022/09/14 17:18:57 [DEBUG] first center context raw:&{0xc00007af80 0xc0001856c0 <nil> <nil> 0xc000014168}
+2022/09/14 17:18:57 [DEBUG] center begin read request
+2022/09/14 17:18:57 [DEBUG] begin decode request from reader
+2022/09/14 17:18:57 [DEBUG] center recive a new request
+2022/09/14 17:18:57 [DEBUG] center begin init context
+2022/09/14 17:18:57 [DEBUG] first center context raw:&{0xc00007b080 0xc0001857a0 <nil> <nil> 0xc000014168}
+2022/09/14 17:18:57 [DEBUG] center begin read request
+2022/09/14 17:18:57 [DEBUG] begin decode request from reader
+2022/09/14 17:18:57 [DEBUG] center recive a new request
+2022/09/14 17:18:57 [DEBUG] center begin init context
+2022/09/14 17:18:57 [DEBUG] first center context raw:&{0xc00007b180 0xc000185880 <nil> <nil> 0xc000014168}
+2022/09/14 17:18:57 [DEBUG] center begin read request
+2022/09/14 17:18:57 [DEBUG] begin decode request from reader
+2022/09/14 17:18:57 [DEBUG] center recive a new request
+2022/09/14 17:18:57 [DEBUG] center begin init context

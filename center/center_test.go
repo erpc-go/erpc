@@ -2,6 +2,7 @@ package center
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -20,8 +21,14 @@ func TestP(t *testing.T) {
 		panic(err)
 	}
 
-	fmt.Println("%v", defaultCenter.servers)
+	fmt.Printf("%v", defaultCenter.servers)
 
 	fmt.Println(defaultCenter.Discovery("demo"))
 	fmt.Println(defaultCenter.Discovery("hello"))
+}
+
+func TestSplit(t *testing.T) {
+	s := strings.Split("demo", ".")
+	fmt.Println(s)
+	fmt.Println(len(s))
 }

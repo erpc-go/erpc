@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 
@@ -13,6 +14,10 @@ import (
 	"github.com/edte/erpc/protocol"
 	"github.com/edte/erpc/transport"
 	"github.com/edte/testpb2go/center"
+)
+
+var (
+	DefaultConnectionPool transport.Pooler = transport.NewConnectionPool()
 )
 
 type CallRes struct {
@@ -27,20 +32,23 @@ type Client struct {
 
 func NewClient() *Client {
 	c := &Client{
-		pooler: transport.DefaultConnectionPool,
+		pooler: DefaultConnectionPool,
 	}
 	return c
 }
 
 // 对外的接口 1： 参数自动打包，直接传特定参数
-func (c *Client) Call(ctx context.Context, addr string, req interface{}, rsp interface{}) (err error) {
+func (c *Client) Call(ctx context.Context, route string, req interface{}, rsp interface{}) (err error) {
+	log.Debugf("client begin init context when request addr:%s", route)
+
 	// [step 1] 创建连接上下文
 	ct := transport.NewContext()
 
 	// [step 2] 设置请求协议参数，以及其他上下文参数
 	ct.Request = req
 	ct.Response = rsp
-	ct.RequestConn = protocol.NewRequest(addr, req)
+
+	ct.RequestConn = protocol.NewRequest(route, req)
 	ct.ResponseConn = &protocol.Response{}
 	ct.ResponseConn.SetEncode(protocol.DefaultBodyCodec)
 	ct.ResponseConn.SetBody(rsp)
@@ -61,7 +69,11 @@ func (c *Client) listen(ctx context.Context, ct *transport.Context) (err error) 
 
 	// [step 1] 开始发送
 	go func() {
-		c.send(ct, res)
+		log.Debugf("client begin send,raw:%v", ct)
+		if err := c.send(ct, res); err != nil {
+			log.Errorf("client send failed, raw ctx:%v", ct)
+			return
+		}
 	}()
 
 	// [step 2] 设置超时
@@ -81,6 +93,8 @@ func (c *Client) send(ctx *transport.Context, res *CallRes) (err error) {
 	}()
 
 	route := ctx.RequestConn.Route
+
+	log.Debugf("begin get addr %s when send", route)
 
 	// [step 1] 获取 ip:port
 	addr, err := c.getAddr(route)
@@ -122,36 +136,80 @@ func (c *Client) send(ctx *transport.Context, res *CallRes) (err error) {
 // 1. ip://
 // 2. servername.funcname
 func (c *Client) getAddr(server string) (addr string, err error) {
-	log.Debugf("begin get addr, host:%s", server)
+	log.Debugf("client begin get server %s 's addr", server)
 
 	// [step 1] 如果是 ip，就直接走
-	if c.isIp(server) {
+	ip, isIp := c.getIp(server)
+	if isIp {
 		log.Debugf("%s is ip", server)
-		return server[5:], nil
+		return ip, nil
 	}
 
-	log.Debugf("%s begin discover", server)
+	log.Debugf("%s is servername.funcname type", server)
+
+	t := server
 
 	// [step 2]  分割 server，格式为 servername.funcname, 如果不满足则失败
 	s := strings.Split(server, ".")
-	if len(s) != 2 {
+	if len(s) == 1 {
+		t = server
+	} else if len(s) == 2 {
+		t = s[0]
+	} else {
 		log.Errorf("invalid server format, neet [servername.funcname] type, route:%s", server)
 		err = errors.New("invalid server format, neet [servername.funcname] type")
 		return
 	}
 
 	// [step 3] 如果是 servername 格式，就去中心服务发现
-	return c.discovery(s[0])
+	return c.discovery(t)
 }
 
 func (c *Client) isIp(server string) bool {
-	// [step 1] 分割
+	_, isIp := c.getIp(server)
+	return isIp
+}
+
+// 格式校验例子如下：
+// ip://127.0.0.1:8080
+func (c *Client) getIp(server string) (ip string, isIp bool) {
+	// [step 1] 先校验长度
+	if len(server) <= 5 {
+		log.Debugf("server %s 'length <= 5", server)
+		return "", false
+	}
+
+	// [step 2] 然后取 schema 和后面的
 	schema := server[:5]
 	last := server[5:]
 
 	log.Debugf("schema: %s, last: %s", schema, last)
 
-	return schema == "ip://" && net.ParseIP(last) != nil
+	// [step 3] 校验协议
+	if schema != "ip://" {
+		log.Debugf("shema %s not equal ip://", schema)
+		return "", false
+	}
+
+	// [step 3] 再分离 ip 和 port
+	s := strings.Split(last, ":")
+	if len(s) != 2 {
+		log.Debugf("split %s error by :", last)
+		return "", false
+	}
+
+	i, err := strconv.Atoi(s[1])
+	if err != nil {
+		log.Debugf("port %s not number", s[1])
+		return "", false
+	}
+
+	// [step 4] 最后总的校验 ip 和端口范围
+	isIp = net.ParseIP(s[0]) != nil && i >= 0 && i <= 65535
+	if isIp {
+		return last, true
+	}
+	return "", false
 }
 
 // 服务发现
@@ -160,7 +218,7 @@ func (c *Client) isIp(server string) bool {
 func (c *Client) discovery(route string) (addr string, err error) {
 	log.Debugf("begin discovery %s", route)
 
-	if route == contant.RouteDiscovery || route == contant.RouteHeatbeat || route == contant.RouteRegister {
+	if route == "center" {
 		return contant.DefaultCenterAddress, nil
 	}
 
@@ -169,10 +227,19 @@ func (c *Client) discovery(route string) (addr string, err error) {
 	}
 	rsp := &center.DiscoveryResponse{}
 
-	if err = c.Call(context.Background(), route, req, rsp); err != nil {
-		log.Errorf("client discovery %s failed, err:%s", route, err)
+	if err = c.Call(context.Background(), contant.RouteDiscovery, req, rsp); err != nil {
+		log.Errorf("client discovery %s call failed, err:%s", route, err)
 		return
 	}
+
+	if rsp.Err != "" {
+		log.Errorf("client discovery %s server failed, err:%s", route, rsp.Err)
+		return "", errors.New(rsp.Err)
+	}
+
+	log.Debugf("discovery route %s succ,res:%s", route, rsp.Addr)
+
+	addr = rsp.Addr
 
 	return
 }

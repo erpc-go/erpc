@@ -88,6 +88,6 @@ func (r *Request) DecodeBody() (err error) {
 
 // 解码请求
 func (r *Request) DecodeFrom(f io.Reader) (err error) {
-	// log.Debugf("begin decode request from reader")
+	log.Debugf("begin decode request from reader")
 	return DefaultCodec.UnmarshalFrom(f, r)
 }

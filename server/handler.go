@@ -39,12 +39,17 @@ func (h handles) update(name string, handler HandlerFunc, req interface{}, rsp i
 }
 
 // 支持 servername.funcname 或者 funcname 两种访问方式
-func (h handles) get(name string) handleItem {
+func (h handles) get(name string) (res handleItem, has bool) {
+	server := name
+
 	st := strings.Split(name, ".")
-	if len(st) != 2 {
-		log.Debugf("get serve %s handler", name)
-		return h[name]
+	if len(st) == 2 {
+		server = st[1]
 	}
-	log.Debugf("get handler, name :%s, handles raw :%v", st[1], h)
-	return h[st[1]]
+
+	log.Debugf("get serve %s handler", name)
+	log.Debugf("get handler,name :%s,handles raw :%v", st[1], h)
+
+	res, has = h[server]
+	return
 }

@@ -21,12 +21,17 @@ const (
 )
 
 var (
-	// logLevel LogLevel = ErrorLevel
-	logLevel LogLevel = DebugLevel
+	logLevel LogLevel = ErrorLevel
+	// logLevel LogLevel = DebugLevel
 )
 
 func init() {
 	// log.SetFlags(log.Lshortfile)
+	// f, err := os.Create("log.txt")
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// log.SetOutput(f)
 }
 
 func SetLogLevel(l LogLevel) {

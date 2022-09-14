@@ -48,12 +48,12 @@ func (c *Center) HandlerDiscover() server.HandlerFunc {
 		req := ctx.Request.(*center.DiscoveryRequest)
 		rsp := ctx.Response.(*center.DiscoveryResponse)
 
-		log.Debugf("begin recevie rpc discover")
+		log.Debugf("center begin recevie discover %s", req.Server)
 
 		server := ""
 
 		s := strings.Split(req.Server, ".")
-		if len(s) == 0 {
+		if len(s) == 1 {
 			server = req.Server
 		} else if len(s) == 2 {
 			server = s[0]
@@ -62,16 +62,16 @@ func (c *Center) HandlerDiscover() server.HandlerFunc {
 			return
 		}
 
-		log.Debugf("server name is %s", server)
+		log.Debugf("center ,server name is %s", server)
 
 		addr, err := c.Discovery(server)
 		if err != nil {
-			log.Errorf("server %s discovery failed, err:%s", req.Server, err)
+			log.Errorf("center, server %s discovery failed, err:%s", req.Server, err)
 			rsp.Err = err.Error()
 			return
 		}
 
-		log.Debugf("serve %s discover succ, res:%s", req.Server, addr)
+		log.Debugf("center, serve %s discover succ, res:%s", req.Server, addr)
 
 		rsp.Err = ""
 		rsp.Addr = addr
@@ -83,7 +83,7 @@ func (c *Center) HandlerRegister() server.HandlerFunc {
 		req := ctx.Request.(*center.RegisterRequest)
 		rsp := ctx.Response.(*center.RegisterResponse)
 
-		log.Debugf("begin deal rpc register")
+		log.Debugf("center begin deal rpc register")
 
 		r := &RegisterArgs{
 			Server:    req.ServerName,
@@ -92,13 +92,12 @@ func (c *Center) HandlerRegister() server.HandlerFunc {
 		}
 
 		if err := c.Register(r.Server, r.Addr, r.Functions); err != nil {
-			log.Errorf("registe failed, err:%s", err)
+			log.Errorf("center registe failed, err:%s", err)
 			rsp.Err = err.Error()
 			return
 		}
 
-		rsp.Err = ""
-		log.Debugf("register %s succ", r.Server)
+		log.Debugf("center register %s succ", r.Server)
 	}
 }
 

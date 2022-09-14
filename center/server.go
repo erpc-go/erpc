@@ -90,7 +90,7 @@ func (s servers) hasRegiste(server string) bool {
 }
 
 func (s servers) registe(server string, addr string, funcs []string) (err error) {
-	log.Debugf("begin registe sever:%s", server)
+	log.Debugf("center begin registe sever:%s", server)
 
 	// [step 1] 如果 server 没有注册过,则在 center 中注册 server
 	if !s.hasRegiste(server) {
@@ -102,27 +102,27 @@ func (s servers) registe(server string, addr string, funcs []string) (err error)
 	log.Debugf("server %s begin regise funcs,funcs:%v", server, funcs)
 	s[server].registe(addr, funcs)
 
-	log.Debugf("server %s registe succ", server)
+	log.Debugf("center server %s registe succ", server)
 
 	return
 
 }
 
 func (s servers) discovery(server string) (addr string, err error) {
-	log.Debugf("begin get server list %s", server)
+	log.Debugf("center begin get server list %s", server)
 
 	// [step 1] 先从 server map 里取 server， 如果不存在则返回
 	if !s.hasRegiste(server) {
-		log.Errorf("serve %s discover failed, err:%s", server, "server not register")
+		log.Errorf("center serve %s discover failed, err:%s", server, "server not register")
 		return "", errors.New("server not register")
 	}
 
-	log.Debugf("begin check server %s", server)
+	log.Debugf("center begin check server %s", server)
 
 	// [step 2] 如果 server 部署的服务器为空，则返回
 	if s[server].emptyIp() {
-		log.Errorf("server %s discover failed, ip is empty", server)
-		return "", errors.New("server's address list is empty")
+		log.Errorf("server %s discover failed, ip is empty, s raw:%v", server, s)
+		return "", errors.New(fmt.Sprintf("server's %s address list is empty", server))
 	}
 
 	// [step 3] 如果 server 部署的服务器 func 为空，则返回
@@ -131,7 +131,7 @@ func (s servers) discovery(server string) (addr string, err error) {
 		return "", errors.New("server's funcs list is empty")
 	}
 
-	log.Debugf("begin banlance server %s addr", server)
+	log.Debugf("center begin banlance server %s addr", server)
 
 	// [step 3] 正常则帅负载均衡算法选一个服务器
 	return s[server].banlance()
@@ -139,7 +139,7 @@ func (s servers) discovery(server string) (addr string, err error) {
 
 func (s servers) update() {
 	for {
-		log.Debugf("begin update server")
+		log.Debugf("center begin update server")
 
 		t := time.NewTicker(time.Second)
 		select {
@@ -148,7 +148,7 @@ func (s servers) update() {
 				v.update()
 			}
 
-			log.Debugf("update server succ")
+			log.Debugf("center update server succ")
 		}
 	}
 }

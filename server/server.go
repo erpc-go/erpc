@@ -65,9 +65,7 @@ func (s *Server) Handle(host string, handler HandlerFunc, req interface{}, rsp i
 }
 
 // 监听服务
-func (s *Server) Listen(add string) {
-	addr := add[5:]
-
+func (s *Server) Listen(addr string) {
 	log.Debugf("handles:%v", s.handles)
 
 	// [step 1] 开 net
@@ -94,6 +92,9 @@ func (s *Server) Listen(add string) {
 		if err != nil {
 			log.Errorf("server accept faild, addr:%s,err:%s", s.localhost, err)
 		}
+
+		log.Debugf("server %s accept a new client:%s", addr, c.RemoteAddr())
+
 		go s.handle(c)
 	}
 }
@@ -103,14 +104,16 @@ func (s *Server) Listen(add string) {
 func (s *Server) register() {
 	done := make(chan struct{}, 1)
 
+	log.Debugf("server %s begin first registe", s.name)
+
 	// [setp 1] 先尝试注册一次，成功就直接返回
 	err := s.registe()
 	if err == nil {
-		log.Infof("serve %s registe succ", s.name)
+		log.Infof("serve %s first registe succ", s.name)
 		return
 	}
 
-	log.Errorf("server %s registe failed, err:%s", s.name, err.Error())
+	log.Errorf("server %s first registe failed, err:%s", s.name, err.Error())
 
 	// [step 2] 失败就定时 1s 重试注册，直到成功
 	for {
@@ -120,19 +123,25 @@ func (s *Server) register() {
 		case <-done:
 			return
 		case <-t.C:
+			log.Debugf("server %s begin registe", s.name)
+
 			err := s.registe()
+
+			log.Debugf("raw xxxhh:%v, %v", err, err == nil)
+
 			if err == nil {
 				log.Infof("serve %s registe succ", s.name)
 				done <- struct{}{}
 				return
 			}
+
 			log.Errorf("server %s registe failed, err:%s", s.name, err.Error())
 		}
 	}
 }
 
 // TODO: 考虑本地服务缓存提供服务发现、服务注册功能？（去注册中心化？考虑优化）
-func (s *Server) registe() (err error) {
+func (s *Server) registe() error {
 	req := &center.RegisterRequest{
 		ServerName: s.name,
 		Addr:       s.localhost,
@@ -142,47 +151,60 @@ func (s *Server) registe() (err error) {
 
 	c := client.NewClient()
 
-	if err = c.Call(context.Background(), contant.RouteRegister, req, rsp); err != nil {
+	if err := c.Call(context.Background(), contant.RouteRegister, req, rsp); err != nil {
 		log.Errorf("server %s register failed,err:%s", s.name, err)
-		return
+		return err
 	}
 
-	return errors.New(rsp.Err)
+	// log.Debugf("registe response:%v", rsp.Err)
+	if rsp.Err != "" {
+		return errors.New(rsp.Err)
+	}
+
+	return nil
 }
 
 func (s *Server) handle(conn net.Conn) {
 	// [step 1] 循环处理一个连接
 	for {
-		log.Debugf("recive a new request")
-		log.Debugf("begin init context")
+		log.Debugf("%s recive a new request", s.name)
+		log.Debugf("%s begin init context", s.name)
 
 		// [step 2] 开连接上下文
 		c := transport.NewContext()
 		c.SetConn(conn)
 
+		log.Debugf("first %s context raw:%v", s.name, c)
+
 		// [step 3] 初始化上下文参数
 		c.SetResponseConn(protocol.NewResponse())
 		c.RequestConn.SetEncode(codec.CodeTypePb)
 
-		log.Debugf("begin read request")
+		log.Debugf("%s begin read request", s.name)
 
 		// [step 4] 读请求
+		// FIX: 这里注意，现有逻辑是 read 失败会直接返回，理论上应该是阻塞而不是返回
+		// net 的 read 操作是阻塞的，但是不知道为啥变非阻塞了
 		if err := c.ReadRequest(); err != nil {
 			if err == io.EOF {
 				continue
 			}
-			log.Errorf("read request failed, err:%s", err)
+			log.Errorf("%s read request failed, err:%s", s.name, err)
 			c.ResponseConn.SetStatus(protocol.StatusError)
 			c.SendResponse()
 			continue
 		}
 
-		log.Debugf("begin get handler, request:%v", c.RequestConn)
+		log.Debugf("%s begin get handler, request:%v", s.name, c.RequestConn)
 
 		// [step 5] 获取处理 handler item
-		h := s.handles.get(c.RequestConn.Route)
+		h, has := s.handles.get(c.RequestConn.Route)
+		if !has {
+			log.Debugf("server %s has not registe %s", s.name, c.RequestConn.Route)
+			continue
+		}
 
-		log.Debugf("server %s s'handler :%v", c.RequestConn.Route, h)
+		log.Debugf("%s s'handler :%v", c.RequestConn.Route, h)
 
 		// [step 6] 设置上下文参数 body
 		c.RequestConn.SetBody(h.req)
@@ -190,31 +212,34 @@ func (s *Server) handle(conn net.Conn) {
 		c.Request = h.req
 		c.Response = h.rsp
 
-		log.Debugf("begin read request body")
+		log.Debugf("second %s context raw:%v", s.name, c)
+
+		log.Debugf("%s begin read request body", s.name)
 
 		// [step 7] 解析请求体
 		if err := c.ReadRequestBody(); err != nil {
-			log.Errorf("read request body failed")
+			log.Errorf("%s read request body failed", s.name)
 			c.ResponseConn.SetStatus(protocol.StatusError)
 			c.SendResponse()
 			continue
 		}
 
-		log.Debugf("begin handle request")
+		log.Debugf("%s begin handle request", s.name)
 
 		// [step 8] 处理请求
 		c.HandleRequest(h.handler)
 
-		log.Debugf("begin send response")
+		log.Debugf("%s begin send response", s.name)
 
 		// [step 9] 发送响应
 		c.SendResponse()
 
-		log.Debugf("send response succ")
+		log.Debugf("%s send response succ", s.name)
 	}
 }
 
 // FIX: center 也是一个 server，那么 center server 也需要向 center 发心跳？（原地原地是吧)
+// FIX: 这里心跳的时候，每次发都是一个新的 socket 连接，开销大（考虑连接池优化）
 func (s *Server) heatbeat() {
 	req := &center2.HeatRequest{
 		SendTime:   time.Now().UnixMilli(),
@@ -233,7 +258,7 @@ func (s *Server) heatbeat() {
 
 			req.SendTime = time.Now().UnixMilli()
 
-			err := c.Call(context.Background(), "center.heat", req, rsp)
+			err := c.Call(context.Background(), contant.RouteHeatbeat, req, rsp)
 			if err != nil {
 				log.Errorf("heatbeat center heat faild,err:%s", err)
 				continue

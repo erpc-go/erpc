@@ -21,8 +21,6 @@ func handleEcho(c *transport.Context) {
 
 	rsp.Msg = req.Msg
 
-	panic("hhh")
-
 	fmt.Println(rsp.Msg)
 }
 

@@ -10,10 +10,6 @@ var (
 	DefaultHandleTimeout  = time.Second * 5
 )
 
-var (
-	DefaultConnectionPool Pooler = NewConnectionPool()
-)
-
 // 连接池接口
 type Pooler interface {
 	GetConn(addr string) (c net.Conn, err error)
@@ -22,15 +18,19 @@ type Pooler interface {
 // 具体连接池实现
 type Option func(*ConnectionPool)
 
+// TODO: 实现连接池
 type ConnectionPool struct {
 	ConnectTimeout time.Duration // 连接超时设置
 	HandleTimeout  time.Duration // handle 处理超时设置
+
+	conn map[string]net.Conn
 }
 
 func NewConnectionPool(opts ...Option) *ConnectionPool {
 	c := &ConnectionPool{
 		ConnectTimeout: DefaultConnectTimeout,
 		HandleTimeout:  DefaultHandleTimeout,
+		conn:           map[string]net.Conn{},
 	}
 
 	for _, opt := range opts {
@@ -54,5 +54,11 @@ func WithHandleTimeout(t time.Duration) Option {
 
 // TODO: 暂时直接开新连接，之后需要池化
 func (p *ConnectionPool) GetConn(addr string) (c net.Conn, err error) {
-	return net.DialTimeout("tcp", addr, p.ConnectTimeout)
+	conn, ok := p.conn[addr]
+	if ok {
+		return conn, nil
+	}
+	t, err := net.DialTimeout("tcp", addr, p.ConnectTimeout)
+	p.conn[addr] = t
+	return t, err
 }
