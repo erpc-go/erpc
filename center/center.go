@@ -1,9 +1,24 @@
 package center
 
 import (
-	"errors"
+	"time"
 
 	"github.com/edte/erpc/log"
+	"github.com/edte/erpc/server"
+	"github.com/edte/erpc/transport"
+	"github.com/edte/testpb2go/center"
+	"github.com/gin-gonic/gin"
+)
+
+type RegisterArgs struct {
+	Server    string
+	Addr      string
+	Functions []string
+}
+
+var (
+	DefaultCenterHttpAddress = "127.0.0.1:8080"
+	DefaultCenterRpcAddress  = "127.0.0.1:8081"
 )
 
 // TODO: 把负载均衡功能拆分出来，然后服务发现的时候只返回 l5 地址，而不是直接是 ip，把选的过程拆分到 l5，让 client 去调用
@@ -11,71 +26,140 @@ import (
 // 注册中心
 // 提供服务注册、服务发现功能
 type Center struct {
-	serverList        []*serverItem          // server list
-	invalidServerList []*serverItem          // ping 没有响应的 server list
-	serverInfo        map[string]*serverItem // servername -> server info
+	listenAddr string
+	servers    servers
 }
 
 func NewCenter() *Center {
 	c := &Center{
-		serverList:        []*serverItem{},
-		invalidServerList: []*serverItem{},
-		serverInfo:        map[string]*serverItem{},
+		servers: map[string]*serverItem{},
 	}
 	return c
 }
 
-func (c *Center) hasServerRegiste(server string) bool {
-	_, ok := c.serverInfo[server]
-	return ok
+func (c *Center) Listen() {
+	go c.listenHttp()
+	go c.updateServer()
+	c.listenRpc()
 }
 
-func (c *Center) register(server string, addr string, funcs []string) (err error) {
-	log.Debugf("begin registe sever:%s", server)
-
-	// [step 1] 如果 server 没有注册过,则在 center 中注册 server
-	if !c.hasServerRegiste(server) {
-		log.Debugf("server %s has not registerd, begin regise to center", server)
-		si := newServerItem(server)
-		c.serverList = append(c.serverList, si)
-		c.serverInfo[server] = si
-	}
-
-	// [step 2] 如果 server 已经注册过
-	log.Debugf("server %s begin regise funcs,funcs:%v", server, funcs)
-	c.serverInfo[server].registe(addr, funcs)
-
-	log.Debugf("server %s registe succ", server)
-
-	return
+func (c *Center) listenRpc() {
+	s := server.NewServer()
+	s.Handle("center.discovery", c.rpcDiscoverHandler(), &center.DiscoveryRequest{}, &center.DiscoveryResponse{})
+	s.Handle("center.register", c.rpcRegisterHandler(), &center.RegisterRequest{}, &center.RegisterResponse{})
+	s.Handle("center.heat", c.rpcPingHandler(), &center.HeatRequest{}, &center.HeatResponse{})
+	s.Listen(DefaultCenterRpcAddress)
 }
 
-func (c *Center) discovery(server string) (addr string, err error) {
-	log.Debugf("begin get server list %s", server)
+func (c *Center) listenHttp() {
+	r := gin.Default()
+	r.GET("/discovery", c.httpDiscoveryHandler())
+	r.POST("/register", c.httpRegisterHandler())
+	r.Run(DefaultCenterHttpAddress)
+}
 
-	// [step 1] 先从 server map 里取 server， 如果不存在则返回
-	si, ok := c.serverInfo[server]
-	if !ok {
-		log.Errorf("serve %s discover failed, err:%s", server, "server not register")
-		return "", errors.New("server not register")
+func (c *Center) rpcDiscoverHandler() server.HandlerFunc {
+	return func(ctx *transport.Context) {
+		req := ctx.Request.(*center.DiscoveryRequest)
+		rsp := ctx.Response.(*center.DiscoveryResponse)
+
+		log.Debugf("begin recevie rpc discover")
+
+		res, err := c.Discovery(req.Server)
+		if err != nil {
+			log.Errorf("server %s discovery failed, err:%s", req.Server, err)
+			rsp.Err = err.Error()
+			return
+		}
+
+		log.Debugf("serve %s discover succ, res:%s", req.Server, res)
+		rsp.Err = ""
 	}
+}
 
-	log.Debugf("begin check server %s", server)
+func (c *Center) rpcRegisterHandler() server.HandlerFunc {
+	return func(ctx *transport.Context) {
+		req := ctx.Request.(*center.RegisterRequest)
+		rsp := ctx.Response.(*center.RegisterResponse)
 
-	// [step 2] 如果 server 部署的服务器为空，则返回
-	if si.emptyIp() {
-		log.Errorf("server %s discover failed, ip is empty", server)
-		return "", errors.New("server's address list is empty")
+		log.Debugf("begin deal rpc register")
+
+		r := &RegisterArgs{
+			Server:    req.ServerName,
+			Addr:      req.Addr,
+			Functions: req.Functions,
+		}
+
+		if err := c.Register(r.Server, r.Addr, r.Functions); err != nil {
+			log.Errorf("registe failed, err:%s", err)
+			rsp.Err = err.Error()
+			return
+		}
+
+		rsp.Err = ""
+		log.Debugf("register %s succ", r.Server)
 	}
+}
 
-	// [step 3] 如果 server 部署的服务器 func 为空，则返回
-	if si.emptyFuncs() {
-		log.Errorf("server %s discover failed, funcs is empty", server)
-		return "", errors.New("server's funcs list is empty")
+func (c *Center) rpcPingHandler() server.HandlerFunc {
+	return func(ctx *transport.Context) {
+		req := ctx.Request.(*center.HeatRequest)
+		rsp := ctx.Response.(*center.HeatResponse)
+
+		s := c.servers[req.ServerName]
+		s.heatbeat(req.Addr, req.SendTime)
+
+		rsp.ResponseTime = time.Now().UnixNano()
 	}
+}
 
-	log.Debugf("begin banlance server %s addr", server)
+func (c *Center) httpDiscoveryHandler() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		s := ctx.Query("server")
+		res, err := c.Discovery(s)
+		if err != nil {
+			log.Errorf("server %s discovery failed, err:%s", s, err)
+			ctx.String(500, err.Error())
+			return
+		}
+		log.Debugf("serve %s discover succ, res:%s", s, res)
+		ctx.String(200, res)
+	}
+}
 
-	// [step 3] 正常则帅负载均衡算法选一个服务器
-	return si.banlance()
+func (c *Center) httpRegisterHandler() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		r := &RegisterArgs{}
+
+		log.Debugf("recevie register http")
+
+		if err := ctx.BindJSON(&r); err != nil {
+			log.Errorf("registe failed, err:%s", err)
+			ctx.String(500, err.Error())
+			return
+		}
+
+		log.Debugf("args:%v", r)
+
+		if err := c.Register(r.Server, r.Addr, r.Functions); err != nil {
+			log.Errorf("registe failed, err:%s", err)
+			ctx.String(500, err.Error())
+			return
+		}
+
+		log.Debugf("register %s succ", r.Server)
+	}
+}
+
+func (c *Center) Register(server string, addr string, funcs []string) (err error) {
+	return c.servers.registe(server, addr, funcs)
+}
+
+func (c *Center) Discovery(server string) (addr string, err error) {
+	return c.servers.discovery(server)
+}
+
+// 周期 update 失效的 server
+func (c *Center) updateServer() {
+	c.servers.update()
 }
