@@ -14,7 +14,7 @@ import (
 type Request struct {
 	Magic      int    // 魔数
 	Version    string // rpc 版本
-	Host       string // 请求 serverName.funcName
+	Route      string // 请求 serverName.funcName
 	Type       int    // 报文类型
 	Sequence   int    // 序列报文号
 	EncodeType string // body 编码方式
@@ -24,11 +24,11 @@ type Request struct {
 	body   interface{} // raw body type
 }
 
-func NewRequest(server string, body interface{}) *Request {
+func NewRequest(route string, body interface{}) *Request {
 	return &Request{
 		Magic:      defaultMagic,
 		Version:    Version,
-		Host:       server,
+		Route:      route,
 		Type:       int(MessageTypeRequest),
 		Sequence:   getSeq(),
 		EncodeType: DefaultBodyCodec.String(),
@@ -48,6 +48,10 @@ func (r *Request) SetEncode(c codec.Type) {
 
 func (r *Request) SetBody(body interface{}) {
 	r.body = body
+}
+
+func (r *Request) SetHost(host string) {
+	r.Route = host
 }
 
 // 编码请求

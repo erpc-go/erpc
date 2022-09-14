@@ -10,12 +10,17 @@ var (
 	DefaultHandleTimeout  = time.Second * 5
 )
 
-type Option func(*ConnectionPool)
+var (
+	DefaultConnectionPool Pooler = NewConnectionPool()
+)
 
-// 连接池
+// 连接池接口
 type Pooler interface {
 	GetConn(addr string) (c net.Conn, err error)
 }
+
+// 具体连接池实现
+type Option func(*ConnectionPool)
 
 type ConnectionPool struct {
 	ConnectTimeout time.Duration // 连接超时设置

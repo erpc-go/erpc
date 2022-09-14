@@ -3,12 +3,13 @@ module github.com/edte/erpc
 go 1.19
 
 require (
+	github.com/edte/testpb2go v0.0.0-20220914033834-d99c71df9316
 	github.com/gin-gonic/gin v1.8.1
+	github.com/go-playground/assert/v2 v2.0.1
 	github.com/golang/protobuf v1.5.2
 )
 
 require (
-	github.com/edte/testpb2go v0.0.0-20220913084128-f99d44b18a25 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
 	github.com/go-playground/locales v0.14.0 // indirect
 	github.com/go-playground/universal-translator v0.18.0 // indirect
