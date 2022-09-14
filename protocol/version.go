@@ -1,5 +1,5 @@
 package protocol
 
 var (
-	Version = "v0.2"
+	Version = "v0.1"
 )

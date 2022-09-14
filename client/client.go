@@ -1,11 +1,14 @@
 package client
 
 import (
+	"context"
 	"errors"
+	"fmt"
+	"io/ioutil"
+	"net/http"
 	"strings"
 	"time"
 
-	"github.com/edte/erpc/center"
 	"github.com/edte/erpc/log"
 	"github.com/edte/erpc/protocol"
 	"github.com/edte/erpc/transport"
@@ -28,7 +31,26 @@ func NewClient() *Client {
 	return c
 }
 
-func (c *Client) Call(server string, req interface{}, rsp interface{}, res *CallRes) {
+func (c *Client) Call(ctx context.Context, addr string, req interface{}, rsp interface{}) (err error) {
+	// [step 1] 超时处理
+	res := &CallRes{
+		Done: make(chan struct{}),
+		Err:  err,
+	}
+
+	go func() {
+		c.Do(addr, req, rsp, res)
+	}()
+
+	select {
+	case <-ctx.Done():
+		return errors.New(fmt.Sprintf("call %s timeout", addr))
+	case <-res.Done:
+		return res.Err
+	}
+}
+
+func (c *Client) Do(server string, req interface{}, rsp interface{}, res *CallRes) {
 	var err error
 
 	defer func() {
@@ -52,8 +74,9 @@ func (c *Client) Call(server string, req interface{}, rsp interface{}, res *Call
 	log.Debugf("server %s begin discovery", server)
 
 	// [step 2] 先服务发现取目标 ip:port
-	addr, err := center.Discovery(serverName)
+	addr, err := c.discoveryHttp(serverName)
 	if err != nil {
+		log.Errorf("server %s discovery http failed, err:%s", serverName, err)
 		return
 	}
 
@@ -94,5 +117,38 @@ func (c *Client) Call(server string, req interface{}, rsp interface{}, res *Call
 
 	log.Debugf("call server %s succ", server)
 
+	return
+}
+
+// 服务发现
+// 给定请求服务名，然后负债均衡返回其中一个部署的机器 ip 地址
+// TODO: 每次响应一个 ip，那其他集群内怎么同步的？
+func (c *Client) discoveryHttp(server string) (addr string, err error) {
+	url := "http://127.0.0.1:8080/discovery?server=" + server
+
+	log.Debugf("server %s begin discovery, url:%s", server, url)
+
+	resp, err := http.Get(url)
+	if err != nil {
+		log.Errorf("server %s get http failed, err:%s", server, err)
+		return
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Errorf("server %s read body failed, err:%s", server, err)
+		return
+	}
+
+	if resp.StatusCode == 500 {
+		log.Errorf("server %s response 500, err:%s", server, err)
+		return "", errors.New(string(body))
+	}
+
+	return string(body), nil
+}
+
+func (c *Client) discoveryRpc(server string) (addr string, err error) {
 	return
 }

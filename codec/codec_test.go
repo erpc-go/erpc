@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/edte/testpb2go/hello"
+	"github.com/edte/testpb2go/demo"
 )
 
 type Person struct {
@@ -38,11 +38,11 @@ func TestGob(t *testing.T) {
 
 func TestPB(t *testing.T) {
 	c := Coder(CodeTypePb)
-	p := hello.HelloRequest{
+	p := demo.HelloRequest{
 		Msg: "ping",
 	}
 	b, err := c.Marshal(&p)
-	pp := hello.HelloRequest{}
+	pp := demo.HelloRequest{}
 	fmt.Println(b, err)
 	c.Unmarshal(b, &pp)
 	fmt.Println(pp)

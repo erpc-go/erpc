@@ -38,9 +38,10 @@ client     <---->       server
 **例子**
 
 ```
-go run test/center/center.go
-go run test/server/server.go
-go run test/client/client.go
+go run ./demo/center/center.go
+go run ./demo/server/server.go
+go run ./demo/client/client.go
+go run ./demo/balance/balance.go
 ```
 
 ## todo
@@ -48,11 +49,15 @@ go run test/client/client.go
 - [x] 多种编码方式
 - [x] 网络协议设计
 - [x] 增加超时处理
+- [x] 心跳检测
 - [ ] 支持多种负载均衡算法
 - [ ] 把负载均衡从 center 拆分出来单独作为一个新的服务
 - [ ] 实现连接池
 - [ ] 实现链路追踪日志管理
 - [ ] 自定义序列化协议实现
+- [ ] 熔断机制
+- [ ] 自定义网络模型
+- [ ] 协程池实现
 
 ## 现有问题
 - center ping 有 bug

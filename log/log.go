@@ -1,6 +1,7 @@
 package log
 
 import (
+	"fmt"
 	"log"
 )
 
@@ -20,9 +21,13 @@ const (
 )
 
 var (
-	logLevel LogLevel = ErrorLevel
-	// logLevel LogLevel = DebugLevel
+	// logLevel LogLevel = ErrorLevel
+	logLevel LogLevel = DebugLevel
 )
+
+func init() {
+	// log.SetFlags(log.Lshortfile)
+}
 
 func SetLogLevel(l LogLevel) {
 	logLevel = l
@@ -32,40 +37,44 @@ func Infof(format string, a ...any) {
 	if logLevel > InfoLevel {
 		return
 	}
-	log.Printf(format, a...)
+	log.Printf(fmt.Sprintf("[INFO] %s", fmt.Sprintf(format, a...)))
 }
 
 func Debugf(format string, a ...any) {
 	if logLevel > DebugLevel {
 		return
 	}
-	log.Printf(format, a...)
+
+	log.Printf(fmt.Sprintf("[DEBUG] %s", fmt.Sprintf(format, a...)))
 }
 
 func Errorf(format string, a ...any) {
 	if logLevel > ErrorLevel {
 		return
 	}
-	log.Printf(format, a...)
+
+	log.Printf(fmt.Sprintf("[ERROR] %s", fmt.Sprintf(format, a...)))
 }
 
 func Warnf(format string, a ...any) {
 	if logLevel > WarnLevel {
 		return
 	}
-	log.Printf(format, a...)
+
+	log.Printf(fmt.Sprintf("[WARN] %s", fmt.Sprintf(format, a...)))
 }
 
 func Panicf(format string, a ...any) {
 	if logLevel > PanicLevel {
 		return
 	}
-	log.Panicf(format, a...)
+
+	log.Printf(fmt.Sprintf("[PANIC] %s", fmt.Sprintf(format, a...)))
 }
 
 func Fatalf(format string, a ...any) {
 	if logLevel > PanicLevel {
 		return
 	}
-	log.Fatalf(format, a...)
+	log.Printf(fmt.Sprintf("[FATAL] %s", fmt.Sprintf(format, a...)))
 }
