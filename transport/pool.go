@@ -1,18 +1,38 @@
 package transport
 
 import (
+	"context"
 	"net"
-	"time"
 )
 
-var (
-	DefaultConnectTimeout = time.Second * 5
-	DefaultHandleTimeout  = time.Second * 5
-)
+// 连接
+type Conn interface {
+	Read(b []byte) (n int, err error)
+	Write(b []byte) (n int, err error)
+	Close() error
+	LocalAddr() net.Addr
+	RemoteAddr() net.Addr
+}
+
+// 连接工厂
+type ConnFactory interface {
+	Get(ctx context.Context) (c Conn, err error)
+	Close(c Conn) error
+	Ping(c Conn) error
+}
 
 // 连接池接口
 type Pooler interface {
-	GetConn(addr string) (c net.Conn, err error)
+	// get conn
+	Get(ctx context.Context) (c Conn, err error)
+	// put conn
+	Put(c Conn) (err error)
+	// close conn
+	Close(c Conn) (err error)
+	// close all conn
+	Release() (err error)
+	// get valid connn number
+	Len() int
 }
 
 // 具体连接池实现
@@ -20,18 +40,11 @@ type Option func(*ConnectionPool)
 
 // TODO: 实现连接池
 type ConnectionPool struct {
-	ConnectTimeout time.Duration // 连接超时设置
-	HandleTimeout  time.Duration // handle 处理超时设置
-
-	conn map[string]net.Conn
+	factory ConnFactory
 }
 
 func NewConnectionPool(opts ...Option) *ConnectionPool {
-	c := &ConnectionPool{
-		ConnectTimeout: DefaultConnectTimeout,
-		HandleTimeout:  DefaultHandleTimeout,
-		conn:           map[string]net.Conn{},
-	}
+	c := &ConnectionPool{}
 
 	for _, opt := range opts {
 		opt(c)
@@ -40,25 +53,27 @@ func NewConnectionPool(opts ...Option) *ConnectionPool {
 	return c
 }
 
-func WithConnectionTimeout(t time.Duration) Option {
-	return func(cp *ConnectionPool) {
-		cp.ConnectTimeout = t
-	}
+// get conn
+func (co *ConnectionPool) Get(ctx context.Context) (c Conn, err error) {
+	panic("not implemented") // TODO: Implement
 }
 
-func WithHandleTimeout(t time.Duration) Option {
-	return func(cp *ConnectionPool) {
-		cp.HandleTimeout = t
-	}
+// put conn
+func (co *ConnectionPool) Put(c Conn) (err error) {
+	panic("not implemented") // TODO: Implement
 }
 
-// TODO: 暂时直接开新连接，之后需要池化
-func (p *ConnectionPool) GetConn(addr string) (c net.Conn, err error) {
-	conn, ok := p.conn[addr]
-	if ok {
-		return conn, nil
-	}
-	t, err := net.DialTimeout("tcp", addr, p.ConnectTimeout)
-	p.conn[addr] = t
-	return t, err
+// close conn
+func (co *ConnectionPool) Close(c Conn) (err error) {
+	panic("not implemented") // TODO: Implement
+}
+
+// close all conn
+func (co *ConnectionPool) Release() (err error) {
+	panic("not implemented") // TODO: Implement
+}
+
+// get valid connn number
+func (co *ConnectionPool) Len() int {
+	panic("not implemented") // TODO: Implement
 }

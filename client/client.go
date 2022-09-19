@@ -7,7 +7,6 @@ import (
 	"net"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/edte/erpc/center/contant"
 	"github.com/edte/erpc/log"
@@ -16,25 +15,45 @@ import (
 	"github.com/edte/testpb2go/center"
 )
 
-var (
-	DefaultConnectionPool transport.Pooler = transport.NewConnectionPool()
-)
-
 type CallRes struct {
 	Done chan struct{}
 	Err  error
 }
 
+type Option func(*Client)
+
 type Client struct {
-	pooler         transport.Pooler // 底层连接池
-	ConnectTimeout time.Duration    // 连接超时设置
+	pooler      transport.Pooler      // 底层连接池
+	enablePool  bool                  // 使用连接池
+	protocol    string                // 使用协议，默认 TCP
+	connFactory transport.ConnFactory // 连接工厂
 }
 
 func NewClient() *Client {
 	c := &Client{
-		pooler: DefaultConnectionPool,
+		pooler:     nil,
+		enablePool: false,
+		protocol:   "",
 	}
 	return c
+}
+
+func WithPool(p transport.Pooler) Option {
+	return func(c *Client) {
+		c.pooler = p
+	}
+}
+
+func WithDefualtPoll() Option {
+	return func(c *Client) {
+		c.pooler = transport.NewConnectionPool()
+	}
+}
+
+func WithConnFactory(f transport.ConnFactory) Option {
+	return func(c *Client) {
+		c.connFactory = f
+	}
 }
 
 // 对外的接口 1： 参数自动打包，直接传特定参数
@@ -106,7 +125,7 @@ func (c *Client) send(ctx *transport.Context, res *CallRes) (err error) {
 	log.Debugf("begin get conn from pool, server:%s, addr:%s", route, addr)
 
 	// [step 2] 然后从连接池中取一个连接
-	conn, err := c.pooler.GetConn(addr)
+	conn, err := c.pooler.Get(context.Background())
 	if err != nil {
 		log.Errorf("get conn addr %s failed, err:%s", addr, err)
 		return

@@ -91,3 +91,7 @@ func (r *Request) DecodeFrom(f io.Reader) (err error) {
 	log.Debugf("begin decode request from reader")
 	return DefaultCodec.UnmarshalFrom(f, r)
 }
+
+// TODO: 读写时对协议的校验等等还没有实现
+
+// TODO: 支持不同类型的请求报文

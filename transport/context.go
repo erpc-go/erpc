@@ -1,8 +1,6 @@
 package transport
 
 import (
-	"net"
-
 	"github.com/edte/erpc/protocol"
 )
 
@@ -14,7 +12,7 @@ type Context struct {
 	Request  interface{}
 	Response interface{}
 
-	conn net.Conn
+	conn Conn
 }
 
 func NewContext() *Context {
@@ -24,7 +22,7 @@ func NewContext() *Context {
 	}
 }
 
-func (c *Context) SetConn(conn net.Conn) {
+func (c *Context) SetConn(conn Conn) {
 	c.conn = conn
 }
 

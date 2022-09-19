@@ -17,6 +17,8 @@ type RegisterArgs struct {
 	Functions []string
 }
 
+// TODO: 增加多机房，路由功能
+
 // TODO: 把负载均衡功能拆分出来，然后服务发现的时候只返回 l5 地址，而不是直接是 ip，把选的过程拆分到 l5，让 client 去调用
 
 // 注册中心

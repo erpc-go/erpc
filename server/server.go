@@ -259,6 +259,8 @@ func (s *Server) heatbeat() {
 
 			req.SendTime = time.Now().UnixMilli()
 
+			// TODO: 心跳包考虑用 UDP？
+
 			err := c.Call(context.Background(), contant.RouteHeatbeat, req, rsp)
 			if err != nil {
 				log.Errorf("heatbeat center heat faild,err:%s", err)
