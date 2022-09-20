@@ -630,6 +630,7 @@ func (st *` + st.Name + `) WriteTo(w io.Writer) (err error) {
 	}
 
 	c.WriteString(`
+    buf.Flush()
 	return err
 }
 `)

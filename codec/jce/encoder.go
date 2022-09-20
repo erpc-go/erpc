@@ -19,6 +19,10 @@ func NewEncoder(w io.Writer) *Encoder {
 	}
 }
 
+func (w *Encoder) Flush() (err error) {
+	return w.buf.Flush()
+}
+
 //go:nosplit
 func (w *Encoder) writeU8(data uint8) (err error) {
 	return w.buf.WriteByte(data)
