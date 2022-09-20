@@ -597,7 +597,7 @@ func (gen *GenGo) genFunWriteBlock(st *StructInfo) {
 
 	// WriteBlock function head
 	c.WriteString(`// WriteBlock encode struct
-func (st *` + st.Name + `) WriteBlock(buf *jce.Buffer, tag byte) error {
+func (st *` + st.Name + `) WriteBlock(buf *jce.Encoder, tag byte) error {
 	var err error
 	err = buf.WriteHead(jce.StructBegin, tag)
 	if err != nil {
@@ -622,7 +622,7 @@ func (gen *GenGo) genFunWriteTo(st *StructInfo) {
 	c := &gen.code
 
 	c.WriteString(`// WriteTo encode struct to buffer
-func (st *` + st.Name + `) WriteTo(buf *jce.Buffer) (err error) {
+func (st *` + st.Name + `) WriteTo(buf *jce.Encoder) (err error) {
 `)
 	for _, v := range st.Mb {
 		gen.genWriteVar(&v, "st.", false)
@@ -874,7 +874,7 @@ func (gen *GenGo) genFunReadFrom(st *StructInfo) {
 	c := &gen.code
 
 	c.WriteString(`// ReadFrom reads  from readBuf and put into struct.
-func (st *` + st.Name + `) ReadFrom(readBuf *jce.Reader) error {
+func (st *` + st.Name + `) ReadFrom(readBuf *jce.Decoder) error {
 	var (
 		err error
 		length int32
@@ -903,7 +903,7 @@ func (gen *GenGo) genFunReadBlock(st *StructInfo) {
 	c := &gen.code
 
 	c.WriteString(`// ReadBlock reads struct from the given tag , require or optional.
-func (st *` + st.Name + `) ReadBlock(readBuf *jce.Reader, tag byte, require bool) error {
+func (st *` + st.Name + `) ReadBlock(readBuf *jce.Decoder, tag byte, require bool) error {
 	var (
 		err error
 		have bool
