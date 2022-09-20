@@ -47,32 +47,6 @@ type StructInfo struct {
 	DependModuleWithJce map[string]string
 }
 
-// ArgInfo record argument information.
-type ArgInfo struct {
-	Name       string
-	OriginName string //original name
-	IsOut      bool
-	Type       *VarType
-}
-
-// FunInfo record function information.
-type FunInfo struct {
-	Name       string // after the uppercase converted name
-	OriginName string // original name
-	HasRet     bool
-	RetType    *VarType
-	Args       []ArgInfo
-}
-
-// InterfaceInfo record interface information.
-type InterfaceInfo struct {
-	Name                string
-	OriginName          string // original name
-	Fun                 []FunInfo
-	DependModule        map[string]bool
-	DependModuleWithJce map[string]string
-}
-
 // EnumMember record member information.
 type EnumMember struct {
 	Key   string
@@ -111,11 +85,10 @@ type Parse struct {
 	OriginModule string
 	Include      []string
 
-	Struct    []StructInfo
-	Interface []InterfaceInfo
-	Enum      []EnumInfo
-	Const     []ConstInfo
-	HashKey   []HashKeyInfo
+	Struct  []StructInfo
+	Enum    []EnumInfo
+	Const   []ConstInfo
+	HashKey []HashKeyInfo
 
 	// have parsed include file
 	IncParse []*Parse
@@ -386,87 +359,6 @@ func (p *Parse) parseStruct() {
 	p.Struct = append(p.Struct, st)
 }
 
-func (p *Parse) parseInterfaceFun() *FunInfo {
-	fun := &FunInfo{}
-	p.next()
-	if p.t.T == tkBraceRight {
-		return nil
-	}
-	if p.t.T == tkVoid {
-		fun.HasRet = false
-	} else if !isType(p.t.T) && p.t.T != tkName && p.t.T != tkUnsigned {
-		p.parseErr("expect type")
-	} else {
-		fun.HasRet = true
-		fun.RetType = p.parseType()
-	}
-	p.expect(tkName)
-	fun.Name = p.t.S.S
-	p.expect(tkPtl)
-
-	p.next()
-	if p.t.T == tkShr {
-		return fun
-	}
-
-	// No parameter function, exit directly.
-	if p.t.T == tkPtr {
-		p.expect(tkSemi)
-		return fun
-	}
-
-	for {
-		arg := &ArgInfo{}
-		if p.t.T == tkOut {
-			arg.IsOut = true
-			p.next()
-		} else {
-			arg.IsOut = false
-		}
-
-		arg.Type = p.parseType()
-		p.next()
-		if p.t.T == tkName {
-			arg.Name = p.t.S.S
-			p.next()
-		}
-
-		fun.Args = append(fun.Args, *arg)
-
-		if p.t.T == tkComma {
-			p.next()
-		} else if p.t.T == tkPtr {
-			p.expect(tkSemi)
-			break
-		} else {
-			p.parseErr("expect , or )")
-		}
-	}
-	return fun
-}
-
-func (p *Parse) parseInterface() {
-	itf := &InterfaceInfo{}
-	p.expect(tkName)
-	itf.Name = p.t.S.S
-	for _, v := range p.Interface {
-		if v.Name == itf.Name {
-			p.parseErr(itf.Name + " Redefine.")
-		}
-	}
-	p.expect(tkBraceLeft)
-
-	for {
-		fun := p.parseInterfaceFun()
-		if fun == nil {
-			break
-		}
-		itf.Fun = append(itf.Fun, *fun)
-	}
-	p.expect(tkSemi) //semicolon at the end of struct.
-	p.Interface = append(p.Interface, *itf)
-}
-
 func (p *Parse) parseConst() {
 	m := ConstInfo{}
 
@@ -558,8 +450,6 @@ func (p *Parse) parseModuleSegment() {
 			p.parseEnum()
 		case tkStruct:
 			p.parseStruct()
-		case tkInterface:
-			p.parseInterface()
 		case tkKey:
 			p.parseHashKey()
 		default:
@@ -589,7 +479,6 @@ func (p *Parse) parseModule() {
 			for _, incParse := range p.IncParse {
 				if incParse.ProtoName == newp.ProtoName {
 					incParse.Struct = append(incParse.Struct, newp.Struct...)
-					incParse.Interface = append(incParse.Interface, newp.Interface...)
 					incParse.Enum = append(incParse.Enum, newp.Enum...)
 					incParse.Const = append(incParse.Const, newp.Const...)
 					incParse.HashKey = append(incParse.HashKey, newp.HashKey...)
@@ -668,7 +557,7 @@ func (p *Parse) findEnumName(ename string) (*EnumMember, *EnumInfo) {
 		}
 	}
 	if cenum != nil && cenum.Module == "" {
-		if *gModuleCycle == true {
+		if moduleCycle == true {
 			cenum.Module = p.ProtoName + "_" + p.Module
 		} else {
 			cenum.Module = p.Module
@@ -704,10 +593,10 @@ func (p *Parse) checkDepTName(ty *VarType, dm *map[string]bool, dmj *map[string]
 		if ty.CType == tkName {
 			p.parseErr(ty.TypeSt + " not find define")
 		}
-		if *gModuleCycle == true {
+		if moduleCycle == true {
 			if mod != p.Module || protoName != p.ProtoName {
 				var modStr string
-				if *gModuleUpper {
+				if moduleUpper {
 					modStr = upperFirstLetter(mod)
 				} else {
 					modStr = mod
@@ -747,18 +636,6 @@ func (p *Parse) analyzeTName() {
 			p.checkDepTName(ty, &p.Struct[i].DependModule, &p.Struct[i].DependModuleWithJce)
 		}
 	}
-
-	for i, v := range p.Interface {
-		for _, v := range v.Fun {
-			for _, v := range v.Args {
-				ty := v.Type
-				p.checkDepTName(ty, &p.Interface[i].DependModule, &p.Interface[i].DependModuleWithJce)
-			}
-			if v.RetType != nil {
-				p.checkDepTName(v.RetType, &p.Interface[i].DependModule, &p.Interface[i].DependModuleWithJce)
-			}
-		}
-	}
 }
 
 func (p *Parse) analyzeDefault() {
@@ -771,7 +648,7 @@ func (p *Parse) analyzeDefault() {
 				}
 				defValue := enum.Name + "_" + upperFirstLetter(mb.Key)
 				var currModule string
-				if *gModuleCycle == true {
+				if moduleCycle == true {
 					currModule = p.ProtoName + "_" + p.Module
 				} else {
 					currModule = p.Module
