@@ -170,8 +170,9 @@ func (gen *GenGo) genAll() {
 	for _, v := range gen.p.Struct {
 		gen.genStruct(&v)
 	}
+
 	if len(gen.p.Enum) > 0 || len(gen.p.Const) > 0 || len(gen.p.Struct) > 0 {
-		gen.saveToSourceFile(path2ProtoName(gen.path) + ".go")
+		gen.saveToSourceFile(path2ProtoName(gen.path) + ".jce.go")
 	}
 
 	fileMap[gen.path] = true

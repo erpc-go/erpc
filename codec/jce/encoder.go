@@ -3,6 +3,7 @@ package jce
 import (
 	"bufio"
 	"encoding/binary"
+	"io"
 	"math"
 	"unsafe"
 )
@@ -10,6 +11,12 @@ import (
 // Encoder is wrapper of bytes.Encoder
 type Encoder struct {
 	buf bufio.Writer
+}
+
+func NewEncoder(w io.Writer) *Encoder {
+	return &Encoder{
+		buf: *bufio.NewWriter(w),
+	}
 }
 
 //go:nosplit
