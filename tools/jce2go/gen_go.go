@@ -236,6 +236,7 @@ func (gen *GenGo) genPackage() {
 	gen.code.WriteString(`
 import (
 	"fmt"
+    "io"
 
 `)
 	gen.code.WriteString("\"" + gen.codecPath + "\"\n")
@@ -597,23 +598,22 @@ func (gen *GenGo) genFunWriteBlock(st *StructInfo) {
 
 	// WriteBlock function head
 	c.WriteString(`// WriteBlock encode struct
-func (st *` + st.Name + `) WriteBlock(buf *jce.Encoder, tag byte) error {
-	var err error
-	err = buf.WriteHead(jce.StructBegin, tag)
-	if err != nil {
-		return err
-	}
+func (st *` + st.Name + `) WriteBlock(w io.Writer, tag byte) (err error) {
+    buf := jce.NewEncoder(w)
 
-	err = st.WriteTo(buf)
-	if err != nil {
-		return err
-	}
+	if err = buf.WriteHead(jce.StructBegin, tag);err != nil {
+        return
+    }
 
-	err = buf.WriteHead(jce.StructEnd, 0)
-	if err != nil {
-		return err
-	}
-	return nil
+	if err = st.WriteTo(w);err != nil {
+        return
+    }
+
+	if err = buf.WriteHead(jce.StructEnd, 0);err!=nil {
+        return 
+    }
+
+	return
 }
 `)
 }
@@ -622,7 +622,8 @@ func (gen *GenGo) genFunWriteTo(st *StructInfo) {
 	c := &gen.code
 
 	c.WriteString(`// WriteTo encode struct to buffer
-func (st *` + st.Name + `) WriteTo(buf *jce.Encoder) (err error) {
+func (st *` + st.Name + `) WriteTo(w io.Writer) (err error) {
+    buf := jce.NewEncoder(w)
 `)
 	for _, v := range st.Mb {
 		gen.genWriteVar(&v, "st.", false)
@@ -874,13 +875,14 @@ func (gen *GenGo) genFunReadFrom(st *StructInfo) {
 	c := &gen.code
 
 	c.WriteString(`// ReadFrom reads  from readBuf and put into struct.
-func (st *` + st.Name + `) ReadFrom(readBuf *jce.Decoder) error {
+func (st *` + st.Name + `) ReadFrom(r io.Reader) (err error) {
 	var (
-		err error
 		length int32
 		have bool
 		ty byte
 	)
+
+    readBuf := jce.NewDecoder(r)
 	st.ResetDefault()
 
 `)
@@ -903,17 +905,21 @@ func (gen *GenGo) genFunReadBlock(st *StructInfo) {
 	c := &gen.code
 
 	c.WriteString(`// ReadBlock reads struct from the given tag , require or optional.
-func (st *` + st.Name + `) ReadBlock(readBuf *jce.Decoder, tag byte, require bool) error {
+func (st *` + st.Name + `) ReadBlock(r io.Reader, tag byte, require bool) error {
 	var (
 		err error
 		have bool
 	)
+
+    readBuf := jce.NewDecoder(r)
+
 	st.ResetDefault()
 
 	have, err = readBuf.SkipTo(jce.StructBegin, tag, require)
 	if err != nil {
 		return err
 	}
+
 	if !have {
 		if require {
 			return fmt.Errorf("require ` + st.Name + `, but not exist. tag %d", tag)
@@ -921,7 +927,7 @@ func (st *` + st.Name + `) ReadBlock(readBuf *jce.Decoder, tag byte, require boo
 		return nil
 	}
 
-  	err = st.ReadFrom(readBuf)
+  	err = st.ReadFrom(r)
   	if err != nil {
 		return err
 	}
@@ -930,6 +936,7 @@ func (st *` + st.Name + `) ReadBlock(readBuf *jce.Decoder, tag byte, require boo
 	if err != nil {
 		return err
 	}
+
 	_ = have
 	return nil
 }

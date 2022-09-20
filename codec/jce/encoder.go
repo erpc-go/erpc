@@ -10,12 +10,12 @@ import (
 
 // Encoder is wrapper of bytes.Encoder
 type Encoder struct {
-	buf bufio.Writer
+	buf *bufio.Writer
 }
 
 func NewEncoder(w io.Writer) *Encoder {
 	return &Encoder{
-		buf: *bufio.NewWriter(w),
+		buf: bufio.NewWriter(w),
 	}
 }
 
@@ -137,10 +137,7 @@ func (b *Encoder) WriteInt16(data int16, tag byte) (err error) {
 		return
 	}
 
-	if err = b.writeU16(uint16(data)); err != nil {
-		return
-	}
-	return
+	return b.writeU16(uint16(data))
 }
 
 // WriteUint16 write uint16 with the tag.

@@ -11,12 +11,12 @@ import (
 
 // Decoder is wrapper of bytes.Decoder
 type Decoder struct {
-	buf bufio.Reader
+	buf *bufio.Reader
 }
 
 func NewDecoder(r io.Reader) *Decoder {
 	return &Decoder{
-		buf: *bufio.NewReader(r),
+		buf: bufio.NewReader(r),
 	}
 }
 
@@ -543,33 +543,34 @@ func (b *Decoder) ReadFloat64(data *float64, tag byte, require bool) error {
 }
 
 // ReadString reads the string value for the tag and the require or optional sign.
-func (b *Decoder) ReadString(data *string, tag byte, require bool) error {
+func (b *Decoder) ReadString(data *string, tag byte, require bool) (err error) {
 	have, ty, err := b.SkipToNoCheck(tag, require)
 	if err != nil {
-		return err
+		return
 	}
+
 	if !have {
-		return nil
+		return
 	}
 
 	if ty == STRING4 {
 		var length uint32
-		err = b.readU32(&length)
-		if err != nil {
+		if err = b.readU32(&length); err != nil {
 			return fmt.Errorf("read string4 tag:%d error:%v", tag, err)
 		}
 		buff := b.Next(int(length))
 		*data = string(buff)
-	} else if ty == STRING1 {
+		return
+	}
+
+	if ty == STRING1 {
 		var length uint8
-		err = b.readU8(&length)
-		if err != nil {
+		if err = b.readU8(&length); err != nil {
 			return fmt.Errorf("read string1 tag:%d error:%v", tag, err)
 		}
 		buff := b.Next(int(length))
 		*data = string(buff)
-	} else {
-		return fmt.Errorf("need string, tag:%d, but type is %s", tag, getTypeStr(int(ty)))
 	}
-	return nil
+
+	return fmt.Errorf("need string, tag:%d, but type is %s", tag, getTypeStr(int(ty)))
 }
