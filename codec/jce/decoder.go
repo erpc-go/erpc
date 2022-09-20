@@ -570,6 +570,7 @@ func (b *Decoder) ReadString(data *string, tag byte, require bool) (err error) {
 		}
 		buff := b.Next(int(length))
 		*data = string(buff)
+		return
 	}
 
 	return fmt.Errorf("need string, tag:%d, but type is %s", tag, getTypeStr(int(ty)))
