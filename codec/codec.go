@@ -5,7 +5,6 @@ import (
 
 	"github.com/edte/erpc/codec/binary"
 	"github.com/edte/erpc/codec/gob"
-	"github.com/edte/erpc/codec/jce"
 	"github.com/edte/erpc/codec/json"
 	"github.com/edte/erpc/codec/pb"
 )
@@ -41,7 +40,7 @@ var (
 func init() {
 	coderMap[CodeTypeBinary] = binary.DefaultCoder
 	coderMap[CodeTypeGob] = gob.DefaultCoder
-	coderMap[CodeTypeJce] = jce.DefaultCoder
+	// coderMap[CodeTypeJce] = jce.DefaultCoder
 	coderMap[CodeTypeJson] = json.DefaultCoder
 	coderMap[CodeTypePb] = pb.DefaultCoder
 }

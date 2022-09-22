@@ -261,7 +261,6 @@ import (
 
 	// Reference imports to suppress errors if they are not otherwise used.
 	var _ = fmt.Errorf
-	var _ = jce.FromInt8
 
 `)
 }
@@ -450,19 +449,18 @@ func (gen *GenGo) genFunResetDefault(st *StructInfo) {
 func (gen *GenGo) genWriteSimpleList(mb *StructMember, prefix string, hasRet bool) {
 	c := &gen.code
 	tag := strconv.Itoa(int(mb.Tag))
-	unsign := "Int8"
-	if mb.Type.TypeK.Unsigned {
-		unsign = "Uint8"
-	}
 	errStr := errString(hasRet)
+
+	if mb.Type.TypeK.Unsigned {
+		c.WriteString(`
+err = buf.WriteSliceUint8(` + gen.genVariableName(prefix, mb.Key) + `,` + tag + `,` + `)
+` + errStr + `
+`)
+		return
+	}
+
 	c.WriteString(`
-err = buf.WriteHead(jce.SimpleList, ` + tag + `)
-` + errStr + `
-err = buf.WriteHead(jce.BYTE, 0)
-` + errStr + `
-err = buf.WriteInt32(int32(len(` + gen.genVariableName(prefix, mb.Key) + `)), 0)
-` + errStr + `
-err = buf.WriteSlice` + unsign + `(` + gen.genVariableName(prefix, mb.Key) + `)
+err = buf.WriteSliceInt8(` + gen.genVariableName(prefix, mb.Key) + `,` + tag + `,` + `)
 ` + errStr + `
 `)
 }

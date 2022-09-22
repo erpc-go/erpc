@@ -1,16 +1,30 @@
-// Package codec implement
 // 支持 jce2go 的底层库，用于基础类型的序列化
 // 高级类型的序列化，由代码生成器，转换为基础类型的序列化
 
 package jce
 
 import (
-	"unsafe"
+	"encoding/binary"
 )
+
+// 默认序列化字节序为大端
+var (
+	defulatByteOrder = binary.BigEndian
+)
+
+// jce 基础编码类型表，用来编码使用，和语言无关
+type JceEncodeType byte
+
+func (j JceEncodeType) String() string {
+	if int(j) < len(typeToStr) {
+		return typeToStr[j]
+	}
+	return "invalidType"
+}
 
 // jce type
 const (
-	BYTE byte = iota
+	BYTE JceEncodeType = iota
 	SHORT
 	INT
 	LONG
@@ -41,16 +55,4 @@ var typeToStr = []string{
 	"StructEnd",
 	"ZeroTag",
 	"SimpleList",
-}
-
-func getTypeStr(t int) string {
-	if t < len(typeToStr) {
-		return typeToStr[t]
-	}
-	return "invalidType"
-}
-
-// FromInt8 NewReader(FromInt8(vec))
-func FromInt8(vec []int8) []byte {
-	return *(*[]byte)(unsafe.Pointer(&vec))
 }

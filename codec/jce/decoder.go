@@ -9,228 +9,729 @@ import (
 	"unsafe"
 )
 
-// Decoder is wrapper of bytes.Decoder
+// TODO: 考虑用 io.ReadFULL() 优化？同步读取
+
+// TODO: 考虑优化长度字段？string 和 list、map 等的长度字段怎么优化？单独写一个 readLength()、writeLength()
+// 还是像现有 string 一样拆分 type？
+
+// Decoder 编码器，用于反序列化
 type Decoder struct {
-	buf *bufio.Reader
+	buf   *bufio.Reader
+	order binary.ByteOrder
 }
 
 func NewDecoder(r io.Reader) *Decoder {
 	return &Decoder{
-		buf: bufio.NewReader(r),
+		buf:   bufio.NewReader(r),
+		order: defulatByteOrder,
 	}
 }
 
-//go:nosplit
-func (r *Decoder) readU8(data *uint8) (err error) {
-	*data, err = r.buf.ReadByte()
+// 根据 tag、require 读取对应数据的 type
+// 传入 tag 和是否一定的存在
+// 返回读取的结果 type，以及 tag 是否存在，最后是是否存在错误
+func (d *Decoder) ReadHead(tag byte, require bool) (t JceEncodeType, have bool, err error) {
+	for {
+		// [step 1] 读取一个 head
+		curType, curTag, err := d.readHead()
+		if err != nil {
+			return curType, false, fmt.Errorf("read head failed, err:%s", err)
+		}
+
+		// [step 2] 如果读到了 struct 的结尾，或者比需要的 tag 还大，说明需要读取的 tag 不存在
+		if curType == StructEnd || curTag > tag {
+			// [step 2.1] 如果需要存在，但是却不存在，则返回错误
+			if require {
+				return curType, false, fmt.Errorf("can not find Tag %d. get tag: %d, get type: %d", tag, curTag, curType)
+			}
+			// [step 2.2] 如果虽然不存在，但是不是必须的，则只返回读取失败即可
+			// 多读了一个head, 退回去.
+			d.unreadHead(curTag)
+			return curType, false, nil
+		}
+
+		// [step 3] 如果找到了对应的 tag
+		if curTag == tag {
+			return curType, true, nil
+		}
+
+		// [step 4]  如果现在的 tag 比需要的 tag 小，则需要继续读取，先跳过当前 tag 余下的数据
+		if err = d.skipField(curType); err != nil {
+			return curType, false, fmt.Errorf("skip type  %s'data filed, err:%s", curType, err)
+		}
+
+		// [step 5] 继续读取下一个 tag
+	}
+}
+
+// TODO: 这里 data 为什么传指针而不是返回值？因为代码生成的时候，如果是 optional，可能有一个默认值，而默认值是
+// 反序列化前设置的，所以如果是做返回值，那么在这里其实是不知道对应的默认值是多少的，那么就需要再更改
+// 代码生成的逻辑，比较麻烦，所以这里暂时传指针，这样如果不需要修改时，就不动指针即可，则默认值也不会变
+
+// 反序列化 int8
+func (d *Decoder) ReadInt8(data *int8, tag byte, require bool) (err error) {
+	// [step 1] 读取 head
+	t, have, err := d.ReadHead(tag, require)
+	if err != nil { // 读取失败
+		return fmt.Errorf("read head failed, tag:%d, err:%s", tag, err)
+	}
+	if !have { // tag 不存在,但是不要求必须存在
+		return nil
+	}
+
+	// [setp 2] 开始读取数据
+	switch t {
+	case ZeroTag: // 类型是 0
+		*data = 0
+		return nil
+	case BYTE: // 类型是普通的数据，则读取一个字节
+		var tmp uint8
+		tmp, err = d.readByte()
+		if err != nil {
+			return fmt.Errorf("read 'int8' failed, tag:%d error:%v", tag, err)
+		}
+		*data = int8(tmp)
+		return
+	default: // 如果不是支持的 type
+		return fmt.Errorf("read 'int8' type mismatch, tag:%d, get type:%s", tag, t)
+	}
+}
+
+// 反序列化 int16
+func (d *Decoder) ReadInt16(data *int16, tag byte, require bool) (err error) {
+	// [step 1] 读取 head
+	ty, have, err := d.ReadHead(tag, require)
+	if err != nil { // 读取失败
+		return fmt.Errorf("read head failed, tag:%d, err:%s", tag, err)
+	}
+
+	if !have { // tag 不存在,但是不要求必须存在
+		return nil
+	}
+
+	// [setp 2] 读取数据
+	switch ty {
+	case ZeroTag: // 数据是 0
+		*data = 0
+		return
+	case BYTE: // 类型是一个字节
+		var tmp uint8
+		tmp, err = d.readByte()
+		if err != nil {
+			return fmt.Errorf("read data failed, when int16'data length is 1byte, err:%s", err)
+		}
+		*data = int16(int8(tmp))
+		return
+	case SHORT: // 类型是两个字节
+		var tmp uint16
+		tmp, err = d.readByte2()
+		if err != nil {
+			return fmt.Errorf("read data failed, when int16'data length is 2byte, err:%s", err)
+		}
+		*data = int16(tmp)
+		return
+	default:
+		return fmt.Errorf("read 'int16' type mismatch, tag:%d, get type:%s", tag, ty)
+	}
+}
+
+// 反序列化 int32
+func (d *Decoder) ReadInt32(data *int32, tag byte, require bool) (err error) {
+	// [step 1] 读取 head
+	ty, have, err := d.ReadHead(tag, require)
+	if err != nil { // 读取失败
+		return fmt.Errorf("read head failed, tag:%d, err:%s", tag, err)
+	}
+
+	if !have { // tag 不存在,但是不要求必须存在
+		return nil
+	}
+
+	// [step 2] 读取数据
+	switch ty {
+	case ZeroTag: // 0
+		*data = 0
+		return
+	case BYTE: // 1byte
+		var tmp uint8
+		tmp, err = d.readByte()
+		if err != nil {
+			return fmt.Errorf("read data failed, when int32'data length is 1byte, err:%s", err)
+		}
+		*data = int32(int8(tmp))
+		return
+	case SHORT: // 2byte
+		var tmp uint16
+		tmp, err = d.readByte2()
+		if err != nil {
+			return fmt.Errorf("read data failed, when int32'data length is 2byte, err:%s", err)
+		}
+		*data = int32(int16(tmp))
+		return
+	case INT: // 4 byte
+		var tmp uint32
+		tmp, err = d.readUint32()
+		if err != nil {
+			return fmt.Errorf("read data failed, when int32'data length is 4byte, err:%s", err)
+		}
+		*data = int32(tmp)
+		return
+	default:
+		return fmt.Errorf("read 'int32' type mismatch, tag:%d, get type:%s", tag, ty)
+	}
+}
+
+// 反序列化 int64
+func (d *Decoder) ReadInt64(data *int64, tag byte, require bool) (err error) {
+	// [step 1] 读取 head
+	ty, have, err := d.ReadHead(tag, require)
+	if err != nil { // 读取失败
+		return fmt.Errorf("read head failed, tag:%d, err:%s", tag, err)
+	}
+
+	if !have { // tag 不存在,但是不要求必须存在
+		return nil
+	}
+
+	// [step 2] 读取数据
+	switch ty {
+	case ZeroTag: // 0
+		*data = 0
+		return
+	case BYTE: // 1B
+		var tmp uint8
+		tmp, err = d.readByte()
+		if err != nil {
+			return fmt.Errorf("read data failed, when int64'data length is 1byte, err:%s", err)
+		}
+		*data = int64(int8(tmp))
+		return
+	case SHORT: // 2B
+		var tmp uint16
+		tmp, err = d.readByte2()
+		if err != nil {
+			return fmt.Errorf("read data failed, when int64'data length is 2byte, err:%s", err)
+		}
+		*data = int64(int16(tmp))
+		return
+	case INT: // 4B
+		var tmp uint32
+		tmp, err = d.readUint32()
+		if err != nil {
+			return fmt.Errorf("read data failed, when int64'data length is 4byte, err:%s", err)
+		}
+		*data = int64(int32(tmp))
+		return
+	case LONG: // 8B
+		var tmp uint64
+		tmp, err = d.readByte8()
+		if err != nil {
+			return fmt.Errorf("read data failed, when int64'data length is 8byte, err:%s", err)
+		}
+		*data = int64(tmp)
+		return
+	default:
+		return fmt.Errorf("read 'int64' type mismatch, tag:%d, get type:%s", tag, ty)
+	}
+}
+
+// 反序列化 uint8
+func (d *Decoder) ReadUint8(data *uint8, tag byte, require bool) (err error) {
+	n := int8(*data)
+	if err := d.ReadInt8(&n, tag, require); err != nil {
+		return fmt.Errorf("read uint 8 failed, err:%s", err)
+	}
+	*data = uint8(n)
 	return
 }
 
-//go:nosplit
-func (r *Decoder) readU16(data *uint16) (err error) {
-	var (
-		b  [2]byte
-		bs []byte
-	)
-	bs = b[:]
-	_, err = r.buf.Read(bs)
-	*data = binary.BigEndian.Uint16(bs)
+// 反序列化 uint16
+func (d *Decoder) ReadUint16(data *uint16, tag byte, require bool) (err error) {
+	n := int16(*data)
+	if err := d.ReadInt16(&n, tag, require); err != nil {
+		return fmt.Errorf("read uint 16 failed, err:%s", err)
+	}
+	*data = uint16(n)
+	return err
+}
+
+// 反序列化 uint32
+func (d *Decoder) ReadUint32(data *uint32, tag byte, require bool) (err error) {
+	n := int32(*data)
+	if err := d.ReadInt32(&n, tag, require); err != nil {
+		return fmt.Errorf("read uint 32 failed, err:%s", err)
+	}
+	*data = uint32(n)
+	return err
+}
+
+// 反序列化 uint64
+func (d *Decoder) ReadUint64(data *uint64, tag byte, require bool) (err error) {
+	n := int64(*data)
+	if err := d.ReadInt64(&n, tag, require); err != nil {
+		return fmt.Errorf("read uint 64 failed, err:%s", err)
+	}
+	*data = uint64(n)
+	return err
+}
+
+// 反序列化 float32
+func (d *Decoder) ReadFloat32(data *float32, tag byte, require bool) (err error) {
+	// [step 1] 读取 head
+	ty, have, err := d.ReadHead(tag, require)
+	if err != nil { // 读取失败
+		return fmt.Errorf("read head failed, tag:%d, err:%s", tag, err)
+	}
+
+	if !have { // tag 不存在,但是不要求必须存在
+		return nil
+	}
+
+	// [step 2] 读取数据
+	switch ty {
+	case ZeroTag: // 0
+		*data = 0
+		return
+	case FLOAT: // 4B
+		var tmp uint32
+		tmp, err = d.readUint32()
+		if err != nil {
+			return fmt.Errorf("read data failed, when float32'data length is 4byte, err:%s", err)
+		}
+		*data = math.Float32frombits(tmp)
+		return
+	default:
+		return fmt.Errorf("read 'float' type mismatch, tag:%d, get type:%s", tag, ty)
+	}
+}
+
+// 反序列化 float64
+func (d *Decoder) ReadFloat64(data *float64, tag byte, require bool) (err error) {
+	// [step 1] 读取 head
+	ty, have, err := d.ReadHead(tag, require)
+	if err != nil { // 读取失败
+		return fmt.Errorf("read head failed, tag:%d, err:%s", tag, err)
+	}
+
+	if !have { // tag 不存在,但是不要求必须存在
+		return nil
+	}
+
+	// [step 2] 读取数据
+	switch ty {
+	case ZeroTag: // 0
+		*data = 0
+		return
+	case FLOAT: // 4B
+		var tmp uint32
+		tmp, err = d.readUint32()
+		if err != nil {
+			return fmt.Errorf("read data failed, when float64'data length is 4byte, err:%s", err)
+		}
+		*data = float64(math.Float32frombits(tmp))
+		return
+	case DOUBLE: // 8B
+		var tmp uint64
+		tmp, err = d.readByte8()
+		if err != nil {
+			return fmt.Errorf("read data failed, when float64'data length is 8byte, err:%s", err)
+		}
+		*data = math.Float64frombits(tmp)
+		return
+	default:
+		return fmt.Errorf("read 'double' type mismatch, tag:%d, get type:%s", tag, ty)
+	}
+}
+
+// 反序列化 bool
+func (d *Decoder) ReadBool(data *bool, tag byte, require bool) (err error) {
+	// [step 1] 读取
+	var tmp int8
+	err = d.ReadInt8(&tmp, tag, require)
+	if err != nil {
+		return fmt.Errorf("read bool failed, err: %s", err)
+	}
+
+	// [step 2] 如果为 0，则为 false
+	if tmp == 0 {
+		*data = false
+		return
+	}
+
+	*data = true
 	return
 }
 
-//go:nosplit
-func (r *Decoder) readU32(data *uint32) (err error) {
-	var (
-		b  [4]byte
-		bs []byte
-	)
-	bs = b[:]
-	_, err = r.buf.Read(bs)
-	*data = binary.BigEndian.Uint32(bs)
+// ReadString reads the string value for the tag and the require or optional sign.
+func (d *Decoder) ReadString(data *string, tag byte, require bool) (err error) {
+	// [step 1] 读取 head
+	t, have, err := d.ReadHead(tag, require)
+	if err != nil { // 读取失败
+		return fmt.Errorf("read head failed, tag:%d, err:%s", tag, err)
+	}
+
+	if !have { // tag 不存在,但是不要求必须存在
+		return nil
+	}
+
+	// [step 2] 读数据
+	switch t {
+	case STRING1: // 1B
+		var length uint8
+		var buff []byte
+
+		// [step 2.1.1] 读长度
+		if length, err = d.readByte(); err != nil {
+			return fmt.Errorf("read string1' length failed, tag,:%d error:%v", tag, err)
+		}
+
+		// [step 2.1.2] 读具体数据
+		if buff, err = d.readByteN(int(length)); err != nil {
+			return fmt.Errorf("read string1' data failed, tag,:%d error:%v", tag, err)
+		}
+
+		*data = string(buff)
+		return
+	case STRING4: // 4B
+		var length uint32
+		var buff []byte
+
+		// [step 2.2.1] 读长度
+		if length, err = d.readUint32(); err != nil {
+			return fmt.Errorf("read string4' length failed, tag,:%d error:%v", tag, err)
+		}
+
+		// [step 2.2.2] 读具体数据
+		if buff, err = d.readByteN(int(length)); err != nil {
+			return fmt.Errorf("read string4' data failed, tag,:%d error:%v", tag, err)
+		}
+
+		*data = string(buff)
+		return
+	default:
+		return fmt.Errorf("need string, tag:%d, but type is %s", tag, t)
+	}
+}
+
+// TODO: 这里看是不是要优化一下？把代码生成的逻辑放到基础部分里来
+// 反序列化 []uint8
+func (d *Decoder) ReadSliceUint8(data *[]uint8, tag byte, require bool) (err error) {
+	// [step 1] 读取 head
+	t, have, err := d.ReadHead(tag, require)
+	if err != nil { // 读取失败
+		return fmt.Errorf("read head failed, tag:%d, err:%s", tag, err)
+	}
+
+	if !have { // tag 不存在,但是不要求必须存在
+		return nil
+	}
+
+	if JceEncodeType(t) != SimpleList {
+		return fmt.Errorf("need simpleList type, but %s, tag:%d", t, tag)
+	}
+
+	// [setp 2] 读 item type
+	itemType, err := d.readByte()
+	if err != nil {
+		return fmt.Errorf("read item type failed, tag:%d, err:%s", tag, err)
+	}
+
+	if JceEncodeType(itemType) != BYTE {
+		return fmt.Errorf("need BYTE byte when read []uint8, tag:%d", tag)
+	}
+
+	// [step 3] 读数据长度
+	length, err := d.readUint32()
+	if err != nil {
+		return fmt.Errorf("read data item length failed, tag:%d, err:%s", tag, err)
+	}
+
+	// [setp 4] 读数据
+	if *data, err = d.readByteN(int(length)); err != nil {
+		err = fmt.Errorf("read []uint8 error:%v", err)
+	}
+
 	return
 }
 
-//go:nosplit
-func (r *Decoder) readU64(data *uint64) (err error) {
-	var (
-		b  [8]byte
-		bs []byte
-	)
-	bs = b[:]
-	_, err = r.buf.Read(bs)
-	*data = binary.BigEndian.Uint64(bs)
+// 反序列化 []int8
+func (d *Decoder) ReadSliceInt8(data *[]int8, tag byte, require bool) (err error) {
+	var tmp []uint8
+	if err = d.ReadSliceUint8(&tmp, tag, require); err != nil {
+		return fmt.Errorf("read []int8 failed, tag:%d, err:%s", tag, err)
+	}
+	*data = *(*[]int8)(unsafe.Pointer(&tmp))
 	return
 }
 
+// ---------------------------------------------------------------------------
+// 内部函数
+
+// readByteN 读取下 n 个字节
+//
 //go:nosplit
-func (b *Decoder) readHead() (ty, tag byte, err error) {
-	data, err := b.buf.ReadByte()
+func (d *Decoder) readByteN(n int) (data []byte, err error) {
+	// [step 1] 建立缓冲区
+	data = make([]byte, n)
+
+	// [step 2] 开始读
+	if _, err = d.buf.Read(data); err != nil {
+		return nil, fmt.Errorf("read n bytes failed, err:%s", err)
+	}
+
+	return
+}
+
+// 读取一个字节
+//
+//go:nosplit
+func (d *Decoder) readByte() (data uint8, err error) {
+	return d.buf.ReadByte()
+}
+
+// 读取两个字节
+//
+//go:nosplit
+func (d *Decoder) readByte2() (data uint16, err error) {
+	// [step 1] 建立缓冲区
+	b := make([]byte, 2)
+
+	// [step 2] 开始读
+	if _, err = d.buf.Read(b); err != nil {
+		return
+	}
+
+	// [step 3] 转换字节序
+	return d.order.Uint16(b), nil
+}
+
+// 读取 4 个字节
+//
+//go:nosplit
+func (d *Decoder) readUint32() (data uint32, err error) {
+	// [step 1] 建立缓冲区
+	b := make([]byte, 4)
+	// [step 2] 开始读
+	if _, err = d.buf.Read(b); err != nil {
+		return
+	}
+	// [step 3] 转换字节序
+	return d.order.Uint32(b), nil
+}
+
+// 读取 8 个字节
+//
+//go:nosplit
+func (d *Decoder) readByte8() (data uint64, err error) {
+	// [step 1] 建立缓冲区
+	b := make([]byte, 8)
+	// [step 2] 开始读
+	if _, err = d.buf.Read(b); err != nil {
+		return
+	}
+	// [step 3] 转换字节序
+	return d.order.Uint64(b), nil
+}
+
+// 反序列化 head，即 type,tag
+// 方案参考 encoder.go WriteHead()
+//
+//go:nosplit
+func (d *Decoder) readHead() (ty JceEncodeType, tag byte, err error) {
+	// [step 1] 先读一字节，前 4bit 必然是 type
+	data, err := d.readByte()
 	if err != nil {
 		return
 	}
 
-	ty = data & 0x0f
-	tag = (data & 0xf0) >> 4
+	// [step 2] 读前 4b 作为 type
+	ty = JceEncodeType((data & 0xf0) >> 4)
+
+	// [step 3] 然后读取剩下 4b，根据是否等于 15，来判断 tag 是这个值，还是后面一个字节
+	tag = data & 0x0f
+
+	// [step 4] 如果等于 15，说明这个值就是 tag
 	if tag != 15 {
 		return
 	}
 
-	data, err = b.buf.ReadByte()
-	if err != nil {
-		return
-	}
-	tag = data
+	// [step 5] 不然的话，就再读一个字节作为 tag
+	tag, err = d.readByte()
 
 	return
 }
 
-// unreadHead 回退一个head byte， curTag为当前读到的tag信息，当tag超过4位时则回退两个head byte
-// unreadHead put back the current head byte.
-func (b *Decoder) unreadHead(curTag byte) {
-	_ = b.buf.UnreadByte()
+// unreadHead 回退一个head byte， curTag 为当前读到的tag信息，当tag超过4位时则回退两个head byte
+//
+//go:nosplit
+func (d *Decoder) unreadHead(curTag byte) {
+	_ = d.buf.UnreadByte()
 	if curTag >= 15 {
-		_ = b.buf.UnreadByte()
+		_ = d.buf.UnreadByte()
 	}
 }
 
-// Next return the []byte of next n .
+// 跳过 type 类型个字节, 不包括 head 部分
 //
 //go:nosplit
-func (b *Decoder) Next(n int) []byte {
-	res, err := b.buf.Peek(n)
-	if err == nil {
-		return []byte{}
-	}
-	return res
-}
-
-// Skip the next n byte.
-//
-//go:nosplit
-func (b *Decoder) Skip(n int) {
-	if _, err := b.buf.Discard(n); err != nil {
-		fmt.Println(err)
-	}
-}
-
-func (b *Decoder) skipFieldMap() error {
-	var length int32
-	err := b.ReadInt32(&length, 0, true)
-	if err != nil {
-		return err
-	}
-
-	for i := int32(0); i < length*2; i++ {
-		tyCur, _, err := b.readHead()
-		if err != nil {
-			return err
-		}
-		_ = b.skipField(tyCur)
-	}
-
-	return nil
-}
-
-func (b *Decoder) skipFieldList() error {
-	var length int32
-	err := b.ReadInt32(&length, 0, true)
-	if err != nil {
-		return err
-	}
-	for i := int32(0); i < length; i++ {
-		tyCur, _, err := b.readHead()
-		if err != nil {
-			return err
-		}
-		_ = b.skipField(tyCur)
-	}
-	return nil
-}
-
-func (b *Decoder) skipFieldSimpleList() error {
-	tyCur, _, err := b.readHead()
-	if tyCur != BYTE {
-		return fmt.Errorf("simple list need byte head. but get %d", tyCur)
-	}
-	if err != nil {
-		return err
-	}
-
-	var length int32
-	err = b.ReadInt32(&length, 0, true)
-	if err != nil {
-		return err
-	}
-
-	b.Skip(int(length))
-	return nil
-}
-
-func (b *Decoder) skipField(ty byte) error {
+func (d *Decoder) skipField(ty JceEncodeType) (err error) {
 	switch ty {
 	case BYTE:
-		b.Skip(1)
+		return d.skip(1)
 	case SHORT:
-		b.Skip(2)
+		return d.skip(2)
 	case INT:
-		b.Skip(4)
+		return d.skip(4)
 	case LONG:
-		b.Skip(8)
+		return d.skip(8)
 	case FLOAT:
-		b.Skip(4)
+		return d.skip(4)
 	case DOUBLE:
-		b.Skip(8)
+		return d.skip(8)
 	case STRING1:
-		data, err := b.buf.ReadByte()
-		if err != nil {
-			return err
-		}
-		l := int(data)
-		b.Skip(l)
+		return d.skipFieldString1()
 	case STRING4:
-		var l uint32
-		err := b.readU32(&l)
-		if err != nil {
-			return err
-		}
-		b.Skip(int(l))
+		return d.skipFieldString4()
 	case MAP:
-		err := b.skipFieldMap()
-		if err != nil {
-			return err
-		}
+		return d.skipFieldMap()
 	case LIST:
-		err := b.skipFieldList()
-		if err != nil {
-			return err
-		}
+		return d.skipFieldList()
 	case SimpleList:
-		err := b.skipFieldSimpleList()
-		if err != nil {
-			return err
-		}
+		return d.skipFieldSimpleList()
 	case StructBegin:
-		err := b.SkipToStructEnd()
-		if err != nil {
-			return err
-		}
+		return d.SkipToStructEnd()
 	case StructEnd:
+		return
 	case ZeroTag:
+		return
 	default:
-		return fmt.Errorf("invalid type")
+		return fmt.Errorf("skip fialed, invalid type")
 	}
-	return nil
+}
+
+// skip 跳过 n 个字节
+//
+//go:nosplit
+func (d *Decoder) skip(n int) (err error) {
+	_, err = d.buf.Discard(n)
+	return
+}
+
+// 跳过 string1 个字节
+//
+//go:nosplit
+func (d *Decoder) skipFieldString1() (err error) {
+	// [step 1] 读 1 字节表示长度
+	data, err := d.readByte()
+	if err != nil {
+		return err
+	}
+	// [step 2] 跳
+	return d.skip(int(data))
+}
+
+// 跳过 string4 个字节
+//
+//go:nosplit
+func (d *Decoder) skipFieldString4() (err error) {
+	// [step 1] 读 4 字节表示长度
+	l, err := d.readUint32()
+	if err != nil {
+		return err
+	}
+	// [step 2] 跳
+	return d.skip(int(l))
+}
+
+// 跳过 map 数据部分字节
+//
+//go:nosplit
+func (d *Decoder) skipFieldMap() (err error) {
+	// [step 1] 读 item 的 长度
+	length, err := d.readUint32()
+	if err != nil {
+		return err
+	}
+
+	// [step 2]  扫描 k-v 对,一共 2*length 个
+	for i := uint32(0); i < length*2; i++ {
+		var t JceEncodeType
+
+		// [step 2.1] 读 head
+		t, _, err = d.readHead()
+		if err != nil {
+			return
+		}
+
+		// [step 2.2] 跳数据
+		if err = d.skipField(t); err != nil {
+			return
+		}
+
+	}
+
+	return
+}
+
+// 跳过 list 数据部分
+//
+//go:nosplit
+func (d *Decoder) skipFieldList() (err error) {
+	// [step 1] 读长度
+	length, err := d.readUint32()
+	if err != nil {
+		return err
+	}
+
+	// [step 2] 跳数据
+	for i := uint32(0); i < length; i++ {
+		// [step 2.1] 读 head
+		var t JceEncodeType
+		t, _, err = d.readHead()
+		if err != nil {
+			return
+		}
+
+		// [step 2.2] 跳 data
+		_ = d.skipField(t)
+	}
+
+	return
+}
+
+// 跳过 SimpleList 数据部分
+//
+//go:nosplit
+func (d *Decoder) skipFieldSimpleList() error {
+	// [step 1] 读 item type
+	t, err := d.readByte()
+	if err != nil {
+		return err
+	}
+
+	if JceEncodeType(t) != BYTE {
+		return fmt.Errorf("simple list need byte head. but get %d", t)
+	}
+
+	// [step 2] 读数据长度
+	length, err := d.readUint32()
+	if err != nil {
+		return err
+	}
+
+	// [step 3] 跳数据
+	return d.skip(int(length))
 }
 
 // SkipToStructEnd for skip to the StructEnd tag.
-func (b *Decoder) SkipToStructEnd() error {
+func (d *Decoder) SkipToStructEnd() (err error) {
 	for {
-		ty, _, err := b.readHead()
+		ty, _, err := d.readHead()
 		if err != nil {
 			return err
 		}
 
-		err = b.skipField(ty)
+		err = d.skipField(ty)
 		if err != nil {
 			return err
 		}
@@ -238,42 +739,13 @@ func (b *Decoder) SkipToStructEnd() error {
 			break
 		}
 	}
-	return nil
-}
 
-// SkipToNoCheck for skip to the none StructEnd tag.
-func (b *Decoder) SkipToNoCheck(tag byte, require bool) (bool, byte, error) {
-	for {
-		tyCur, tagCur, err := b.readHead()
-		if err != nil {
-			if require {
-				return false, tyCur, fmt.Errorf("can not find Tag %d. But require. %s", tag, err.Error())
-			}
-			return false, tyCur, nil
-		}
-		if tyCur == StructEnd || tagCur > tag {
-			if require {
-				return false, tyCur, fmt.Errorf("can not find Tag %d. But require. tagCur: %d, tyCur: %d",
-					tag, tagCur, tyCur)
-			}
-			// 多读了一个head, 退回去.
-			b.unreadHead(tagCur)
-			return false, tyCur, nil
-		}
-		if tagCur == tag {
-			return true, tyCur, nil
-		}
-
-		// tagCur < tag
-		if err = b.skipField(tyCur); err != nil {
-			return false, tyCur, err
-		}
-	}
+	return
 }
 
 // SkipTo skip to the given tag.
-func (b *Decoder) SkipTo(ty, tag byte, require bool) (bool, error) {
-	have, tyCur, err := b.SkipToNoCheck(tag, require)
+func (d *Decoder) SkipTo(ty JceEncodeType, tag byte, require bool) (find bool, err error) {
+	tyCur, have, err := d.ReadHead(tag, require)
 	if err != nil {
 		return false, err
 	}
@@ -281,297 +753,4 @@ func (b *Decoder) SkipTo(ty, tag byte, require bool) (bool, error) {
 		return false, fmt.Errorf("type not match, need %d, bug %d", ty, tyCur)
 	}
 	return have, nil
-}
-
-// ReadSliceInt8 reads []int8 for the given length and the require or optional sign.
-func (b *Decoder) ReadSliceInt8(data *[]int8, len int32, require bool) error {
-	if len <= 0 {
-		return nil
-	}
-
-	*data = make([]int8, len)
-	_, err := b.buf.Read(*(*[]uint8)(unsafe.Pointer(data)))
-	if err != nil {
-		err = fmt.Errorf("read []int8 error:%v", err)
-	}
-
-	return err
-}
-
-// ReadSliceUint8 reads []uint8 force the given length and the require or optional sign.
-func (b *Decoder) ReadSliceUint8(data *[]uint8, len int32, require bool) error {
-	if len <= 0 {
-		return nil
-	}
-
-	*data = make([]uint8, len)
-	_, err := b.buf.Read(*data)
-	if err != nil {
-		err = fmt.Errorf("read []uint8 error:%v", err)
-	}
-
-	return err
-}
-
-// ReadBytes reads []byte for the given length and the require or optional sign.
-func (b *Decoder) ReadBytes(data *[]byte, len int32, require bool) error {
-	*data = make([]byte, len)
-	_, err := b.buf.Read(*data)
-	return err
-}
-
-// ReadInt8 reads the int8 data for the tag and the require or optional sign.
-func (b *Decoder) ReadInt8(data *int8, tag byte, require bool) error {
-	have, ty, err := b.SkipToNoCheck(tag, require)
-	if err != nil {
-		return err
-	}
-	if !have {
-		return nil
-	}
-	switch ty {
-	case ZeroTag:
-		*data = 0
-	case BYTE:
-		var tmp uint8
-		err = b.readU8(&tmp)
-		*data = int8(tmp)
-	default:
-		return fmt.Errorf("read 'int8' type mismatch, tag:%d, get type:%s", tag, getTypeStr(int(ty)))
-	}
-	if err != nil {
-		err = fmt.Errorf("read 'int8' tag:%d error:%v", tag, err)
-	}
-	return err
-}
-
-// ReadUint8 reads the uint8 for the tag and the require or optional sign.
-func (b *Decoder) ReadUint8(data *uint8, tag byte, require bool) error {
-	n := int16(*data)
-	err := b.ReadInt16(&n, tag, require)
-	*data = uint8(n)
-	return err
-}
-
-// ReadBool reads the bool value for the tag and the require or optional sign.
-func (b *Decoder) ReadBool(data *bool, tag byte, require bool) error {
-	var tmp int8
-	err := b.ReadInt8(&tmp, tag, require)
-	if err != nil {
-		return err
-	}
-	if tmp == 0 {
-		*data = false
-	} else {
-		*data = true
-	}
-	return nil
-}
-
-// ReadInt16 reads the int16 value for the tag and the require or optional sign.
-func (b *Decoder) ReadInt16(data *int16, tag byte, require bool) error {
-	have, ty, err := b.SkipToNoCheck(tag, require)
-	if err != nil {
-		return err
-	}
-	if !have {
-		return nil
-	}
-	switch ty {
-	case ZeroTag:
-		*data = 0
-	case BYTE:
-		var tmp uint8
-		err = b.readU8(&tmp)
-		*data = int16(int8(tmp))
-	case SHORT:
-		var tmp uint16
-		err = b.readU16(&tmp)
-		*data = int16(tmp)
-	default:
-		return fmt.Errorf("read 'int16' type mismatch, tag:%d, get type:%s", tag, getTypeStr(int(ty)))
-	}
-	if err != nil {
-		err = fmt.Errorf("read 'int16' tag:%d error:%v", tag, err)
-	}
-	return err
-}
-
-// ReadUint16 reads the uint16 value for the tag and the require or optional sign.
-func (b *Decoder) ReadUint16(data *uint16, tag byte, require bool) error {
-	n := int32(*data)
-	err := b.ReadInt32(&n, tag, require)
-	*data = uint16(n)
-	return err
-}
-
-// ReadInt32 reads the int32 value for the tag and the require or optional sign.
-func (b *Decoder) ReadInt32(data *int32, tag byte, require bool) error {
-	have, ty, err := b.SkipToNoCheck(tag, require)
-	if err != nil {
-		return err
-	}
-	if !have {
-		return nil
-	}
-	switch ty {
-	case ZeroTag:
-		*data = 0
-	case BYTE:
-		var tmp uint8
-		err = b.readU8(&tmp)
-		*data = int32(int8(tmp))
-	case SHORT:
-		var tmp uint16
-		err = b.readU16(&tmp)
-		*data = int32(int16(tmp))
-	case INT:
-		var tmp uint32
-		err = b.readU32(&tmp)
-		*data = int32(tmp)
-	default:
-		return fmt.Errorf("read 'int32' type mismatch, tag:%d, get type:%s", tag, getTypeStr(int(ty)))
-	}
-	if err != nil {
-		err = fmt.Errorf("read 'int32' tag:%d error:%v", tag, err)
-	}
-	return err
-}
-
-// ReadUint32 reads the uint32 value for the tag and the require or optional sign.
-func (b *Decoder) ReadUint32(data *uint32, tag byte, require bool) error {
-	n := int64(*data)
-	err := b.ReadInt64(&n, tag, require)
-	*data = uint32(n)
-	return err
-}
-
-// ReadInt64 reads the int64 value for the tag and the require or optional sign.
-func (b *Decoder) ReadInt64(data *int64, tag byte, require bool) error {
-	have, ty, err := b.SkipToNoCheck(tag, require)
-	if err != nil {
-		return err
-	}
-	if !have {
-		return nil
-	}
-	switch ty {
-	case ZeroTag:
-		*data = 0
-	case BYTE:
-		var tmp uint8
-		err = b.readU8(&tmp)
-		*data = int64(int8(tmp))
-	case SHORT:
-		var tmp uint16
-		err = b.readU16(&tmp)
-		*data = int64(int16(tmp))
-	case INT:
-		var tmp uint32
-		err = b.readU32(&tmp)
-		*data = int64(int32(tmp))
-	case LONG:
-		var tmp uint64
-		err = b.readU64(&tmp)
-		*data = int64(tmp)
-	default:
-		return fmt.Errorf("read 'int64' type mismatch, tag:%d, get type:%s", tag, getTypeStr(int(ty)))
-	}
-	if err != nil {
-		err = fmt.Errorf("read 'int64' tag:%d error:%v", tag, err)
-	}
-
-	return err
-}
-
-// ReadFloat32 reads the float32 value for the tag and the require or optional sign.
-func (b *Decoder) ReadFloat32(data *float32, tag byte, require bool) error {
-	have, ty, err := b.SkipToNoCheck(tag, require)
-	if err != nil {
-		return err
-	}
-	if !have {
-		return nil
-	}
-
-	switch ty {
-	case ZeroTag:
-		*data = 0
-	case FLOAT:
-		var tmp uint32
-		err = b.readU32(&tmp)
-		*data = math.Float32frombits(tmp)
-	default:
-		return fmt.Errorf("read 'float' type mismatch, tag:%d, get type:%s", tag, getTypeStr(int(ty)))
-	}
-
-	if err != nil {
-		err = fmt.Errorf("read 'float32' tag:%d error:%v", tag, err)
-	}
-	return err
-}
-
-// ReadFloat64 reads the float64 value for the tag and the require or optional sign.
-func (b *Decoder) ReadFloat64(data *float64, tag byte, require bool) error {
-	have, ty, err := b.SkipToNoCheck(tag, require)
-	if err != nil {
-		return err
-	}
-	if !have {
-		return nil
-	}
-
-	switch ty {
-	case ZeroTag:
-		*data = 0
-	case FLOAT:
-		var tmp uint32
-		err = b.readU32(&tmp)
-		*data = float64(math.Float32frombits(tmp))
-	case DOUBLE:
-		var tmp uint64
-		err = b.readU64(&tmp)
-		*data = math.Float64frombits(tmp)
-	default:
-		return fmt.Errorf("read 'double' type mismatch, tag:%d, get type:%s", tag, getTypeStr(int(ty)))
-	}
-
-	if err != nil {
-		err = fmt.Errorf("read 'float64' tag:%d error:%v", tag, err)
-	}
-	return err
-}
-
-// ReadString reads the string value for the tag and the require or optional sign.
-func (b *Decoder) ReadString(data *string, tag byte, require bool) (err error) {
-	have, ty, err := b.SkipToNoCheck(tag, require)
-	if err != nil {
-		return
-	}
-
-	if !have {
-		return
-	}
-
-	if ty == STRING4 {
-		var length uint32
-		if err = b.readU32(&length); err != nil {
-			return fmt.Errorf("read string4 tag:%d error:%v", tag, err)
-		}
-		buff := b.Next(int(length))
-		*data = string(buff)
-		return
-	}
-
-	if ty == STRING1 {
-		var length uint8
-		if err = b.readU8(&length); err != nil {
-			return fmt.Errorf("read string1 tag:%d error:%v", tag, err)
-		}
-		buff := b.Next(int(length))
-		*data = string(buff)
-		return
-	}
-
-	return fmt.Errorf("need string, tag:%d, but type is %s", tag, getTypeStr(int(ty)))
 }
