@@ -51,7 +51,7 @@ func (e *Encoder) WriteHead(t JceEncodeType, tag byte) (err error) {
 	}
 
 	// [step 2] 如果 tag>=15，则用两个字节，先写 type、15 为一个字节
-	if err = e.writeByte(ty | (15 << 4)); err != nil {
+	if err = e.writeByte((ty << 4) | 15); err != nil {
 		return fmt.Errorf("failed to write type byte when tag>=15, err:%s", err)
 	}
 
@@ -76,7 +76,7 @@ func (e *Encoder) WriteInt8(data int8, tag byte) (err error) {
 	}
 
 	// [step 3] 再写数据
-	return e.writeByte(byte(data))
+	return e.writeByte(uint8(data))
 }
 
 // 序列化 int16
@@ -171,7 +171,7 @@ func (e *Encoder) WriteUint32(data uint32, tag byte) (err error) {
 // |----------------------|
 // | type  | tag |  data  |
 // |----------------------|
-func (e *Encoder) WriteUint64(data uint32, tag byte) (err error) {
+func (e *Encoder) WriteUint64(data uint64, tag byte) (err error) {
 	return e.WriteInt64(int64(data), tag)
 }
 
@@ -181,12 +181,17 @@ func (e *Encoder) WriteUint64(data uint32, tag byte) (err error) {
 // | type  | tag |  data  |
 // |----------------------|
 func (e *Encoder) WriteFloat32(data float32, tag byte) (err error) {
-	// [step 1] 写 type、tag
+	// [step 1] 如果值等于 0，则直接写类型 ZeroTag，后面就不用写数据了(数据压缩优化)
+	if data == 0 {
+		return e.WriteHead(ZeroTag, tag)
+	}
+
+	// [step 2] 写 type、tag
 	if err = e.WriteHead(FLOAT, tag); err != nil {
 		return err
 	}
 
-	// [step 2] 然后写数据
+	// [step 3] 然后写数据
 	return e.writeByte4(math.Float32bits(data))
 }
 
@@ -196,10 +201,18 @@ func (e *Encoder) WriteFloat32(data float32, tag byte) (err error) {
 // | type  | tag |  data  |
 // |----------------------|
 func (e *Encoder) WriteFloat64(data float64, tag byte) (err error) {
-	// [step 1] 如果值在 float32 的范围内，则写 float32
-	if data >= math.SmallestNonzeroFloat32 && data <= math.MaxFloat32 {
-		return e.WriteFloat32(float32(data), tag)
+	// [step 1] 如果值等于 0，则直接写类型 ZeroTag，后面就不用写数据了(数据压缩优化)
+	if data == 0 {
+		return e.WriteHead(ZeroTag, tag)
 	}
+
+	// -----------------------------------------------
+	// tips: 注意，float 64 不能像 int 一样优化成存 float32，因为 IEEE 浮点数的标准，转换会导致失真,故直接写 double 即可
+	// -----------------------------------------------
+	// [step 2] 如果值在 float32 的范围内，则写 float32
+	// if data >= math.SmallestNonzeroFloat32 && data <= math.MaxFloat32 {
+	// return e.WriteFloat32(float32(data), tag)
+	// }
 
 	// [step 2] 否则写 type、tag
 	if err = e.WriteHead(DOUBLE, tag); err != nil {
@@ -240,7 +253,7 @@ func (e *Encoder) WriteString(data string, tag byte) (err error) {
 		}
 
 		// [step 1.1.2] 写长度 (1B)
-		if err = e.writeByte(byte(len(data))); err != nil {
+		if err = e.writeByte(uint8(len(data))); err != nil {
 			return err
 		}
 	} else {

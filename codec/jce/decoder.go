@@ -35,7 +35,7 @@ func (d *Decoder) ReadHead(tag byte, require bool) (t JceEncodeType, have bool, 
 		// [step 1] 读取一个 head
 		curType, curTag, err := d.readHead()
 		if err != nil {
-			return curType, false, fmt.Errorf("read head failed, err:%s", err)
+			return curType, false, err
 		}
 
 		// [step 2] 如果读到了 struct 的结尾，或者比需要的 tag 还大，说明需要读取的 tag 不存在
@@ -170,7 +170,7 @@ func (d *Decoder) ReadInt32(data *int32, tag byte, require bool) (err error) {
 		return
 	case INT: // 4 byte
 		var tmp uint32
-		tmp, err = d.readUint32()
+		tmp, err = d.readBytes4()
 		if err != nil {
 			return fmt.Errorf("read data failed, when int32'data length is 4byte, err:%s", err)
 		}
@@ -216,7 +216,7 @@ func (d *Decoder) ReadInt64(data *int64, tag byte, require bool) (err error) {
 		return
 	case INT: // 4B
 		var tmp uint32
-		tmp, err = d.readUint32()
+		tmp, err = d.readBytes4()
 		if err != nil {
 			return fmt.Errorf("read data failed, when int64'data length is 4byte, err:%s", err)
 		}
@@ -239,7 +239,7 @@ func (d *Decoder) ReadInt64(data *int64, tag byte, require bool) (err error) {
 func (d *Decoder) ReadUint8(data *uint8, tag byte, require bool) (err error) {
 	n := int8(*data)
 	if err := d.ReadInt8(&n, tag, require); err != nil {
-		return fmt.Errorf("read uint 8 failed, err:%s", err)
+		return fmt.Errorf("read uint8 failed, err:%s", err)
 	}
 	*data = uint8(n)
 	return
@@ -249,7 +249,7 @@ func (d *Decoder) ReadUint8(data *uint8, tag byte, require bool) (err error) {
 func (d *Decoder) ReadUint16(data *uint16, tag byte, require bool) (err error) {
 	n := int16(*data)
 	if err := d.ReadInt16(&n, tag, require); err != nil {
-		return fmt.Errorf("read uint 16 failed, err:%s", err)
+		return fmt.Errorf("read uint16 failed, err:%s", err)
 	}
 	*data = uint16(n)
 	return err
@@ -259,7 +259,7 @@ func (d *Decoder) ReadUint16(data *uint16, tag byte, require bool) (err error) {
 func (d *Decoder) ReadUint32(data *uint32, tag byte, require bool) (err error) {
 	n := int32(*data)
 	if err := d.ReadInt32(&n, tag, require); err != nil {
-		return fmt.Errorf("read uint 32 failed, err:%s", err)
+		return fmt.Errorf("read uint32 failed, err:%s", err)
 	}
 	*data = uint32(n)
 	return err
@@ -269,7 +269,7 @@ func (d *Decoder) ReadUint32(data *uint32, tag byte, require bool) (err error) {
 func (d *Decoder) ReadUint64(data *uint64, tag byte, require bool) (err error) {
 	n := int64(*data)
 	if err := d.ReadInt64(&n, tag, require); err != nil {
-		return fmt.Errorf("read uint 64 failed, err:%s", err)
+		return fmt.Errorf("read uint64 failed, err:%s", err)
 	}
 	*data = uint64(n)
 	return err
@@ -294,7 +294,7 @@ func (d *Decoder) ReadFloat32(data *float32, tag byte, require bool) (err error)
 		return
 	case FLOAT: // 4B
 		var tmp uint32
-		tmp, err = d.readUint32()
+		tmp, err = d.readBytes4()
 		if err != nil {
 			return fmt.Errorf("read data failed, when float32'data length is 4byte, err:%s", err)
 		}
@@ -322,14 +322,18 @@ func (d *Decoder) ReadFloat64(data *float64, tag byte, require bool) (err error)
 	case ZeroTag: // 0
 		*data = 0
 		return
-	case FLOAT: // 4B
-		var tmp uint32
-		tmp, err = d.readUint32()
-		if err != nil {
-			return fmt.Errorf("read data failed, when float64'data length is 4byte, err:%s", err)
-		}
-		*data = float64(math.Float32frombits(tmp))
-		return
+
+	// -----------------------------------------------
+	// tips: 注意，float 64 不能像 int 一样优化成存 float32，因为 IEEE 浮点数的标准，转换会导致失真,故直接写 double 即可
+	// -----------------------------------------------
+	// case FLOAT: // 4B
+	// 	var tmp uint32
+	// 	tmp, err = d.readBytes4()
+	// 	if err != nil {
+	// 		return fmt.Errorf("read data failed, when float64'data length is 4byte, err:%s", err)
+	// 	}
+	// 	*data = float64(math.Float32frombits(tmp))
+	// 	return
 	case DOUBLE: // 8B
 		var tmp uint64
 		tmp, err = d.readByte8()
@@ -397,7 +401,7 @@ func (d *Decoder) ReadString(data *string, tag byte, require bool) (err error) {
 		var buff []byte
 
 		// [step 2.2.1] 读长度
-		if length, err = d.readUint32(); err != nil {
+		if length, err = d.readBytes4(); err != nil {
 			return fmt.Errorf("read string4' length failed, tag,:%d error:%v", tag, err)
 		}
 
@@ -441,7 +445,7 @@ func (d *Decoder) ReadSliceUint8(data *[]uint8, tag byte, require bool) (err err
 	}
 
 	// [step 3] 读数据长度
-	length, err := d.readUint32()
+	length, err := d.readBytes4()
 	if err != nil {
 		return fmt.Errorf("read data item length failed, tag:%d, err:%s", tag, err)
 	}
@@ -475,7 +479,7 @@ func (d *Decoder) readByteN(n int) (data []byte, err error) {
 	data = make([]byte, n)
 
 	// [step 2] 开始读
-	if _, err = d.buf.Read(data); err != nil {
+	if _, err = io.ReadFull(d.buf, data); err != nil {
 		return nil, fmt.Errorf("read n bytes failed, err:%s", err)
 	}
 
@@ -497,7 +501,7 @@ func (d *Decoder) readByte2() (data uint16, err error) {
 	b := make([]byte, 2)
 
 	// [step 2] 开始读
-	if _, err = d.buf.Read(b); err != nil {
+	if _, err = io.ReadFull(d.buf, b); err != nil {
 		return
 	}
 
@@ -508,13 +512,15 @@ func (d *Decoder) readByte2() (data uint16, err error) {
 // 读取 4 个字节
 //
 //go:nosplit
-func (d *Decoder) readUint32() (data uint32, err error) {
+func (d *Decoder) readBytes4() (data uint32, err error) {
 	// [step 1] 建立缓冲区
 	b := make([]byte, 4)
+
 	// [step 2] 开始读
-	if _, err = d.buf.Read(b); err != nil {
+	if _, err = io.ReadFull(d.buf, b); err != nil {
 		return
 	}
+
 	// [step 3] 转换字节序
 	return d.order.Uint32(b), nil
 }
@@ -525,10 +531,12 @@ func (d *Decoder) readUint32() (data uint32, err error) {
 func (d *Decoder) readByte8() (data uint64, err error) {
 	// [step 1] 建立缓冲区
 	b := make([]byte, 8)
+
 	// [step 2] 开始读
-	if _, err = d.buf.Read(b); err != nil {
+	if _, err = io.ReadFull(d.buf, b); err != nil {
 		return
 	}
+
 	// [step 3] 转换字节序
 	return d.order.Uint64(b), nil
 }
@@ -541,7 +549,7 @@ func (d *Decoder) readHead() (ty JceEncodeType, tag byte, err error) {
 	// [step 1] 先读一字节，前 4bit 必然是 type
 	data, err := d.readByte()
 	if err != nil {
-		return
+		return 0, 0, err
 	}
 
 	// [step 2] 读前 4b 作为 type
@@ -573,7 +581,7 @@ func (d *Decoder) unreadHead(curTag byte) {
 
 // 跳过 type 类型个字节, 不包括 head 部分
 //
-//go:nosplit
+// j// go:nosplit
 func (d *Decoder) skipField(ty JceEncodeType) (err error) {
 	switch ty {
 	case BYTE:
@@ -635,7 +643,7 @@ func (d *Decoder) skipFieldString1() (err error) {
 //go:nosplit
 func (d *Decoder) skipFieldString4() (err error) {
 	// [step 1] 读 4 字节表示长度
-	l, err := d.readUint32()
+	l, err := d.readBytes4()
 	if err != nil {
 		return err
 	}
@@ -648,7 +656,7 @@ func (d *Decoder) skipFieldString4() (err error) {
 //go:nosplit
 func (d *Decoder) skipFieldMap() (err error) {
 	// [step 1] 读 item 的 长度
-	length, err := d.readUint32()
+	length, err := d.readBytes4()
 	if err != nil {
 		return err
 	}
@@ -678,7 +686,7 @@ func (d *Decoder) skipFieldMap() (err error) {
 //go:nosplit
 func (d *Decoder) skipFieldList() (err error) {
 	// [step 1] 读长度
-	length, err := d.readUint32()
+	length, err := d.readBytes4()
 	if err != nil {
 		return err
 	}
@@ -714,7 +722,7 @@ func (d *Decoder) skipFieldSimpleList() error {
 	}
 
 	// [step 2] 读数据长度
-	length, err := d.readUint32()
+	length, err := d.readBytes4()
 	if err != nil {
 		return err
 	}
