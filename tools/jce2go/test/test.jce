@@ -1,0 +1,21 @@
+#include "base.jce"
+
+module test {
+    struct RequestPacket
+    {
+        1  require  byte                 a; 
+        2  require  short                b; 
+        3  require  int                  c;
+        4  require  long                 d; 
+        5  require  float                e; 
+        6  require  double               f; 
+        7  require  string               g; 
+        8  optional string               h="test"; 
+        9  optional int                  mm;
+        10 require  vector<byte>         buffer;
+        11 require  vector<string>       s;
+        12 require  vector<base::A>      re;
+        13 require  map<string, string>  context;
+        14 require  map<string, base::A> nn;
+    };
+};
