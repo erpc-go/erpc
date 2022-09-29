@@ -3,7 +3,7 @@ package erpc
 import (
 	"context"
 
-	"github.com/edte/erpc/client"
+	"github.com/erpc-go/erpc/client"
 )
 
 var (

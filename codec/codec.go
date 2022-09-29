@@ -3,10 +3,10 @@ package codec
 import (
 	"io"
 
-	"github.com/edte/erpc/codec/binary"
-	"github.com/edte/erpc/codec/gob"
-	"github.com/edte/erpc/codec/json"
-	"github.com/edte/erpc/codec/pb"
+	"github.com/erpc-go/erpc/codec/binary"
+	"github.com/erpc-go/erpc/codec/gob"
+	"github.com/erpc-go/erpc/codec/json"
+	"github.com/erpc-go/erpc/codec/pb"
 )
 
 // codec 接口

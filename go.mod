@@ -1,4 +1,4 @@
-module github.com/edte/erpc
+module github.com/erpc-go/erpc
 
 go 1.19
 

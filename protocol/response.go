@@ -3,8 +3,8 @@ package protocol
 import (
 	"io"
 
-	"github.com/edte/erpc/codec"
-	"github.com/edte/erpc/log"
+	"github.com/erpc-go/erpc/codec"
+	"github.com/erpc-go/erpc/log"
 )
 
 // 响应报文格式：

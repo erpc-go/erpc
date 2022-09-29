@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/edte/erpc/log"
+	"github.com/erpc-go/erpc/log"
 )
 
 // FIX: 这里有个问题：如果部署不同机子是同一 server，但是 funcs 不同，则会出问题

@@ -1,6 +1,6 @@
 package erpc
 
-import "github.com/edte/erpc/server"
+import "github.com/erpc-go/erpc/server"
 
 var (
 	defaultServer = server.NewServer()

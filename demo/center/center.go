@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/edte/erpc"
+	"github.com/erpc-go/erpc"
 )
 
 func main() {

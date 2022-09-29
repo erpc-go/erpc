@@ -3,7 +3,7 @@ package log_test
 import (
 	"testing"
 
-	"github.com/edte/erpc/log"
+	"github.com/erpc-go/erpc/log"
 )
 
 func TestSetLogLevel(t *testing.T) {

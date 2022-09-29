@@ -4,11 +4,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/edte/erpc/center/contant"
-	"github.com/edte/erpc/log"
-	"github.com/edte/erpc/server"
-	"github.com/edte/erpc/transport"
 	"github.com/edte/testpb2go/center"
+	"github.com/erpc-go/erpc/center/contant"
+	"github.com/erpc-go/erpc/log"
+	"github.com/erpc-go/erpc/server"
+	"github.com/erpc-go/erpc/transport"
 )
 
 type RegisterArgs struct {

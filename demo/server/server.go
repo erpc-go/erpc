@@ -3,9 +3,9 @@ package main
 import (
 	"fmt"
 
-	"github.com/edte/erpc"
-	"github.com/edte/erpc/transport"
 	"github.com/edte/testpb2go/demo"
+	"github.com/erpc-go/erpc"
+	"github.com/erpc-go/erpc/transport"
 )
 
 func handleHello(c *transport.Context) {

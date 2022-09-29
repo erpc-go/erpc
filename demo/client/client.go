@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/edte/erpc"
 	"github.com/edte/testpb2go/demo"
+	"github.com/erpc-go/erpc"
 )
 
 func main() {

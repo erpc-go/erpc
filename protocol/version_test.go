@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/edte/erpc/protocol"
+	"github.com/erpc-go/erpc/protocol"
 )
 
 func TestVersion(t *testing.T) {

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"net"
 
-	"github.com/edte/erpc/transport"
+	"github.com/erpc-go/erpc/transport"
 )
 
 // ConnFactory Implement

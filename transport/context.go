@@ -1,7 +1,7 @@
 package transport
 
 import (
-	"github.com/edte/erpc/protocol"
+	"github.com/erpc-go/erpc/protocol"
 )
 
 // 连接上下文

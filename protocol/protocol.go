@@ -1,6 +1,6 @@
 package protocol
 
-import "github.com/edte/erpc/codec"
+import "github.com/erpc-go/erpc/codec"
 
 const (
 	defaultMagic = 0x3bef5c

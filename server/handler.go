@@ -3,8 +3,8 @@ package server
 import (
 	"strings"
 
-	"github.com/edte/erpc/log"
-	"github.com/edte/erpc/transport"
+	"github.com/erpc-go/erpc/log"
+	"github.com/erpc-go/erpc/transport"
 )
 
 // 异步服务的 handler

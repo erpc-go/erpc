@@ -8,14 +8,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/edte/erpc/center/contant"
-	"github.com/edte/erpc/client"
-	"github.com/edte/erpc/codec"
-	"github.com/edte/erpc/log"
-	"github.com/edte/erpc/protocol"
-	"github.com/edte/erpc/transport"
 	"github.com/edte/testpb2go/center"
 	center2 "github.com/edte/testpb2go/center"
+	"github.com/erpc-go/erpc/center/contant"
+	"github.com/erpc-go/erpc/client"
+	"github.com/erpc-go/erpc/codec"
+	"github.com/erpc-go/erpc/log"
+	"github.com/erpc-go/erpc/protocol"
+	"github.com/erpc-go/erpc/transport"
 )
 
 // 服务器 server

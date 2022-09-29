@@ -1,7 +1,7 @@
 package erpc
 
 import (
-	"github.com/edte/erpc/center"
+	"github.com/erpc-go/erpc/center"
 )
 
 var (
