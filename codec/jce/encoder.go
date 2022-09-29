@@ -319,6 +319,11 @@ func (e *Encoder) Flush() (err error) {
 	return e.buf.Flush()
 }
 
+// return writer
+func (e *Encoder) Writer() (writer *bufio.Writer) {
+	return e.buf
+}
+
 // ---------------------------------------------------------------------------------
 // 内部函数
 
