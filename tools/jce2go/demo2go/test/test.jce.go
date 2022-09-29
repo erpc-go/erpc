@@ -221,9 +221,6 @@ func (st *RequestPacket) ReadFrom(r io.Reader) (n int64, err error) {
 		}
 
 	}
-
-    fmt.Println("16")
-
 	// [step 16] read Arr3
 	var length8 uint32
 
@@ -235,50 +232,26 @@ func (st *RequestPacket) ReadFrom(r io.Reader) (n int64, err error) {
 	if length8, err = decoder.ReadLength(); err != nil {
 		return
 	}
-
-    fmt.Println(length8)
-
-    var aa int8
-
-	if err = decoder.ReadInt8(&aa, 1, true); err != nil {
-		return
-	}
-
-    fmt.Println(aa)
-    fmt.Println("==============")
-
 	// [step 16.3] read data
 	st.Arr3 = make([]base.Request, length8)
+	for i8 := uint32(0); i8 < length8; i8++ {
+		// [step 0] read Arr3[i8]
+		if _, err = st.Arr3[i8].ReadFrom(decoder.Reader()); err != nil {
+			return
+		}
 
-	// for i8 := uint32(0); i8 < length8; i8++ {
-	// 	// [step 0] read Arr3[i8]
-	// 	if _, err = st.Arr3[i8].ReadFrom(decoder.Reader()); err != nil {
-	// 		return
-	// 	}
-
-	// }
-
-    fmt.Println("17")
-
+	}
 	// [step 17] read M2
 	var length9 uint32
-
-    fmt.Println("*")
 
 	// [step 17.1] read type、tag
 	if ty, have, err = decoder.ReadHead(17, true); err != nil {
 		return
 	}
-
-    fmt.Println("#")
-
 	// [step 17.2] read length
 	if length9, err = decoder.ReadLength(); err != nil {
 		return
 	}
-
-    fmt.Println(length9)
-
 	// [step 17.3] read data
 	st.M2 = make(map[string]base.Request, 0)
 	var k9 string
@@ -459,7 +432,7 @@ func (st *RequestPacket) WriteTo(w io.Writer) (n int64, err error) {
 	// [step 16.3] write data
 	for _, v18 := range st.Arr3 {
 		// [step 0] write v18
-		if _, err = v18.WriteTo(w); err != nil {
+		if _, err = v18.WriteTo(encoder.Writer()); err != nil {
 			return
 		}
 	}
@@ -479,7 +452,7 @@ func (st *RequestPacket) WriteTo(w io.Writer) (n int64, err error) {
 			return
 		}
 		// [step 1] write v19
-		if _, err = v19.WriteTo(w); err != nil {
+		if _, err = v19.WriteTo(encoder.Writer()); err != nil {
 			return
 		}
 	}

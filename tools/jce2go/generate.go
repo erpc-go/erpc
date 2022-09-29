@@ -543,7 +543,7 @@ func (gen *Generate) genWriteVar(v *StructMember, prefix string, hasRet bool) {
 		}
 
 		gen.writeString(`
-        if _, err = ` + prefix + v.Key + `.WriteTo(w); err != nil {
+        if _, err = ` + prefix + v.Key + `.WriteTo(encoder.Writer()); err != nil {
             return
         }
 `)
