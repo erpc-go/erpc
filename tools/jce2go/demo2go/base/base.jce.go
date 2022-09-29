@@ -34,72 +34,34 @@ type Request struct {
 	B int8 `json:"b" tag:"1"`
 }
 
-func (st *Request) ResetDefault() {
+func (st *Request) resetDefault() {
 }
 
 // ReadFrom reads from io.Reader and put into struct.
 func (st *Request) ReadFrom(r io.Reader) (n int64, err error) {
 	var (
-		length int32
-		have   bool
-		ty     jce.JceEncodeType
+		have bool
+		ty   jce.JceEncodeType
 	)
 
 	decoder := jce.NewDecoder(r)
-	st.ResetDefault()
+	st.resetDefault()
 
+	// [step 1] read B
 	if err = decoder.ReadInt8(&st.B, 1, true); err != nil {
 		return
 	}
 
 	_ = err
-	_ = length
 	_ = have
 	_ = ty
 	return
 }
 
-// ReadBlock reads struct from the given tag , require or optional.
-func (st *Request) ReadBlock(r io.Reader, tag byte, require bool) error {
-	var (
-		err  error
-		have bool
-	)
-
-	decoder := jce.NewDecoder(r)
-
-	st.ResetDefault()
-
-	have, err = decoder.SkipTo(jce.StructBegin, tag, require)
-	if err != nil {
-		return err
-	}
-
-	if !have {
-		if require {
-			return fmt.Errorf("require Request, but not exist. tag %d", tag)
-		}
-		return nil
-	}
-
-	err = st.ReadFrom(r)
-	if err != nil {
-		return err
-	}
-
-	err = decoder.SkipToStructEnd()
-	if err != nil {
-		return err
-	}
-
-	_ = have
-	return nil
-}
-
 // WriteTo encode struct to io.Writer
 func (st *Request) WriteTo(w io.Writer) (n int64, err error) {
 	encoder := jce.NewEncoder(w)
-	st.ResetDefault()
+	st.resetDefault()
 
 	// [step 1] write B
 	if err = encoder.WriteInt8(st.B, 1); err != nil {
@@ -108,26 +70,5 @@ func (st *Request) WriteTo(w io.Writer) (n int64, err error) {
 
 	// flush to io.Writer
 	err = encoder.Flush()
-	return
-}
-
-// WriteBlock encode struct
-func (st *Request) WriteBlock(w io.Writer, tag byte) (err error) {
-	encoder := jce.NewEncoder(w)
-
-	st.ResetDefault()
-
-	if err = encoder.WriteHead(jce.StructBegin, tag); err != nil {
-		return
-	}
-
-	if err = st.WriteTo(w); err != nil {
-		return
-	}
-
-	if err = encoder.WriteHead(jce.StructEnd, 0); err != nil {
-		return
-	}
-
 	return
 }

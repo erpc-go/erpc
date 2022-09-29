@@ -15,10 +15,10 @@ module test {
         10 require  vector<byte>                 buffer1;
         11 require  vector<unsigned byte>        buffer2;
         12 optional vector<string>               arr1;
-        13 optional vector<vector<string>>       arr2;
-        14 require  vector<base::request>        arr3;
+        13 optional vector<vector<int>>          arr2;
+        14 require  map<string, string>          m1;
         15 require  vector<map<int,string>>      arr4;
-        16 require  map<string, string>          m1;
+        16 require  vector<base::request>        arr3;
         17 require  map<string, base::request>   m2;
     };
 };

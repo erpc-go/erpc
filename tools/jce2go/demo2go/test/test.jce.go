@@ -30,343 +30,239 @@ type RequestPacket struct {
 	Buffer1 []int8                  `json:"buffer1" tag:"10"`
 	Buffer2 []uint8                 `json:"buffer2" tag:"11"`
 	Arr1    []string                `json:"arr1" tag:"12"`
-	Arr2    [][]string              `json:"arr2" tag:"13"`
-	Arr3    []base.Request          `json:"arr3" tag:"14"`
+	Arr2    [][]int32               `json:"arr2" tag:"13"`
+	M1      map[string]string       `json:"m1" tag:"14"`
 	Arr4    []map[int32]string      `json:"arr4" tag:"15"`
-	M1      map[string]string       `json:"m1" tag:"16"`
+	Arr3    []base.Request          `json:"arr3" tag:"16"`
 	M2      map[string]base.Request `json:"m2" tag:"17"`
 }
 
-func (st *RequestPacket) ResetDefault() {
+func (st *RequestPacket) resetDefault() {
 	st.S2 = "test"
 }
 
 // ReadFrom reads from io.Reader and put into struct.
 func (st *RequestPacket) ReadFrom(r io.Reader) (n int64, err error) {
 	var (
-		length int32
-		have   bool
-		ty     jce.JceEncodeType
+		have bool
+		ty   jce.JceEncodeType
 	)
 
 	decoder := jce.NewDecoder(r)
-	st.ResetDefault()
+	st.resetDefault()
 
+	// [step 1] read B
 	if err = decoder.ReadInt8(&st.B, 1, true); err != nil {
 		return
 	}
-
+	// [step 2] read S
 	if err = decoder.ReadInt16(&st.S, 2, true); err != nil {
 		return
 	}
-
+	// [step 3] read I
 	if err = decoder.ReadInt32(&st.I, 3, true); err != nil {
 		return
 	}
-
+	// [step 4] read L
 	if err = decoder.ReadInt64(&st.L, 4, true); err != nil {
 		return
 	}
-
+	// [step 5] read F
 	if err = decoder.ReadFloat32(&st.F, 5, true); err != nil {
 		return
 	}
-
+	// [step 6] read D
 	if err = decoder.ReadFloat64(&st.D, 6, true); err != nil {
 		return
 	}
-
+	// [step 7] read S1
 	if err = decoder.ReadString(&st.S1, 7, true); err != nil {
 		return
 	}
-
+	// [step 8] read S2
 	if err = decoder.ReadString(&st.S2, 8, false); err != nil {
 		return
 	}
-
+	// [step 9] read I2
 	if err = decoder.ReadInt32(&st.I2, 9, false); err != nil {
 		return
 	}
-
-	ty, _, err = decoder.ReadHead(10, true)
-	if err != nil {
+	// [step 10] read Buffer1
+	if err = decoder.ReadSliceInt8(&st.Buffer1, 10, true); err != nil {
 		return
 	}
-
-	if ty == jce.LIST {
-		if err = decoder.ReadInt32(&length, 0, true); err != nil {
-			return
-		}
-		st.Buffer1 = make([]int8, length)
-		for i0, e0 := int32(0), length; i0 < e0; i0++ {
-
-			if err = decoder.ReadInt8(&st.Buffer1[i0], 0, false); err != nil {
-				return
-			}
-		}
-	} else if ty == jce.SimpleList {
-
-		_, err = decoder.SkipTo(jce.BYTE, 0, true)
-		if err != nil {
-			return
-		}
-
-		err = decoder.ReadInt32(&length, 0, true)
-		if err != nil {
-			return
-		}
-
-		err = decoder.ReadSliceInt8(&st.Buffer1, length, true)
-		if err != nil {
-			return
-		}
-
-	} else {
-		if err = fmt.Errorf("require vector, but not"); err != nil {
-			return
-		}
-	}
-	ty, _, err = decoder.ReadHead(11, true)
-	if err != nil {
+	// [step 11] read Buffer2
+	if err = decoder.ReadSliceUint8(&st.Buffer2, 11, true); err != nil {
 		return
 	}
+	// [step 12] read Arr1
+	var length2 uint32
 
-	if ty == jce.LIST {
-		if err = decoder.ReadInt32(&length, 0, true); err != nil {
-			return
-		}
-		st.Buffer2 = make([]uint8, length)
-		for i1, e1 := int32(0), length; i1 < e1; i1++ {
-
-			if err = decoder.ReadUint8(&st.Buffer2[i1], 0, false); err != nil {
-				return
-			}
-		}
-	} else if ty == jce.SimpleList {
-
-		_, err = decoder.SkipTo(jce.BYTE, 0, true)
-		if err != nil {
-			return
-		}
-
-		err = decoder.ReadInt32(&length, 0, true)
-		if err != nil {
-			return
-		}
-
-		err = decoder.ReadSliceUint8(&st.Buffer2, length, true)
-		if err != nil {
-			return
-		}
-
-	} else {
-		if err = fmt.Errorf("require vector, but not"); err != nil {
-			return
-		}
-	}
-	ty, have, err = decoder.ReadHead(12, false)
-	if err != nil {
+	// [step 12.1] read type、tag
+	if ty, have, err = decoder.ReadHead(12, false); err != nil || !have {
 		return
 	}
-
-	if have {
-		if ty == jce.LIST {
-			if err = decoder.ReadInt32(&length, 0, true); err != nil {
-				return
-			}
-			st.Arr1 = make([]string, length)
-			for i2, e2 := int32(0), length; i2 < e2; i2++ {
-
-				if err = decoder.ReadString(&st.Arr1[i2], 0, false); err != nil {
-					return
-				}
-			}
-		} else if ty == jce.SimpleList {
-			if err = fmt.Errorf("not support SimpleList type"); err != nil {
-				return
-			}
-		} else {
-			if err = fmt.Errorf("require vector, but not"); err != nil {
-				return
-			}
-		}
-	}
-
-	ty, have, err = decoder.ReadHead(13, false)
-	if err != nil {
+	// [step 12.2] read list length
+	if length2, err = decoder.ReadLength(); err != nil {
 		return
 	}
-
-	if have {
-		if ty == jce.LIST {
-			if err = decoder.ReadInt32(&length, 0, true); err != nil {
-				return
-			}
-			st.Arr2 = make([][]string, length)
-			for i3, e3 := int32(0), length; i3 < e3; i3++ {
-
-				ty, have, err = decoder.ReadHead(0, false)
-				if err != nil {
-					return
-				}
-
-				if have {
-					if ty == jce.LIST {
-						if err = decoder.ReadInt32(&length, 0, true); err != nil {
-							return
-						}
-						st.Arr2[i3] = make([]string, length)
-						for i4, e4 := int32(0), length; i4 < e4; i4++ {
-
-							if err = decoder.ReadString(&st.Arr2[i3][i4], 0, false); err != nil {
-								return
-							}
-						}
-					} else if ty == jce.SimpleList {
-						if err = fmt.Errorf("not support SimpleList type"); err != nil {
-							return
-						}
-					} else {
-						if err = fmt.Errorf("require vector, but not"); err != nil {
-							return
-						}
-					}
-				}
-			}
-		} else if ty == jce.SimpleList {
-			if err = fmt.Errorf("not support SimpleList type"); err != nil {
-				return
-			}
-		} else {
-			if err = fmt.Errorf("require vector, but not"); err != nil {
-				return
-			}
-		}
-	}
-
-	ty, _, err = decoder.ReadHead(14, true)
-	if err != nil {
-		return
-	}
-
-	if ty == jce.LIST {
-		if err = decoder.ReadInt32(&length, 0, true); err != nil {
+	// [step 12.3] read data
+	st.Arr1 = make([]string, length2)
+	for i2 := uint32(0); i2 < length2; i2++ {
+		// [step 0] read Arr1[i2]
+		if err = decoder.ReadString(&st.Arr1[i2], 0, false); err != nil {
 			return
 		}
-		st.Arr3 = make([]base.Request, length)
-		for i5, e5 := int32(0), length; i5 < e5; i5++ {
 
-			err = st.Arr3[i5].ReadBlock(decoder, 0, false)
-			if err != nil {
+	}
+	// [step 13] read Arr2
+	var length3 uint32
+
+	// [step 13.1] read type、tag
+	if ty, have, err = decoder.ReadHead(13, false); err != nil || !have {
+		return
+	}
+	// [step 13.2] read list length
+	if length3, err = decoder.ReadLength(); err != nil {
+		return
+	}
+	// [step 13.3] read data
+	st.Arr2 = make([][]int32, length3)
+	for i3 := uint32(0); i3 < length3; i3++ {
+		// [step 0] read Arr2[i3]
+		var length4 uint32
+
+		// [step 0.1] read type、tag
+		if ty, have, err = decoder.ReadHead(0, false); err != nil || !have {
+			return
+		}
+		// [step 0.2] read list length
+		if length4, err = decoder.ReadLength(); err != nil {
+			return
+		}
+		// [step 0.3] read data
+		st.Arr2[i3] = make([]int32, length4)
+		for i4 := uint32(0); i4 < length4; i4++ {
+			// [step 0] read Arr2[i3][i4]
+			if err = decoder.ReadInt32(&st.Arr2[i3][i4], 0, false); err != nil {
 				return
 			}
 
 		}
-	} else if ty == jce.SimpleList {
-		if err = fmt.Errorf("not support SimpleList type"); err != nil {
-			return
-		}
-	} else {
-		if err = fmt.Errorf("require vector, but not"); err != nil {
-			return
-		}
+
 	}
-	ty, _, err = decoder.ReadHead(15, true)
-	if err != nil {
+	// [step 14] read M1
+	var length5 uint32
+
+	// [step 14.1] read type、tag
+	if ty, have, err = decoder.ReadHead(14, true); err != nil {
 		return
 	}
-
-	if ty == jce.LIST {
-		if err = decoder.ReadInt32(&length, 0, true); err != nil {
+	// [step 14.2] read length
+	if length5, err = decoder.ReadLength(); err != nil {
+		return
+	}
+	// [step 14.3] read data
+	st.M1 = make(map[string]string, 0)
+	var k5 string
+	var v5 string
+	for i := uint32(0); i < length5; i++ {
+		// [step 0] read k5
+		if err = decoder.ReadString(&k5, 0, false); err != nil {
 			return
 		}
-		st.Arr4 = make([]map[int32]string, length)
-		for i6, e6 := int32(0), length; i6 < e6; i6++ {
+		// [step 1] read v5
+		if err = decoder.ReadString(&v5, 1, false); err != nil {
+			return
+		}
 
-			have, err = decoder.SkipTo(jce.MAP, 0, false)
-			if err != nil {
+		st.M1[k5] = v5
+	}
+	// [step 15] read Arr4
+	var length6 uint32
+
+	// [step 15.1] read type、tag
+	if ty, have, err = decoder.ReadHead(15, true); err != nil || !have {
+		return
+	}
+	// [step 15.2] read list length
+	if length6, err = decoder.ReadLength(); err != nil {
+		return
+	}
+	// [step 15.3] read data
+	st.Arr4 = make([]map[int32]string, length6)
+	for i6 := uint32(0); i6 < length6; i6++ {
+		// [step 0] read Arr4[i6]
+		var length7 uint32
+
+		// [step 0.1] read type、tag
+		if ty, have, err = decoder.ReadHead(0, false); err != nil {
+			return
+		}
+		// [step 0.2] read length
+		if length7, err = decoder.ReadLength(); err != nil {
+			return
+		}
+		// [step 0.3] read data
+		st.Arr4[i6] = make(map[int32]string, 0)
+		var k7 int32
+		var v7 string
+		for i := uint32(0); i < length7; i++ {
+			// [step 0] read k7
+			if err = decoder.ReadInt32(&k7, 0, false); err != nil {
+				return
+			}
+			// [step 1] read v7
+			if err = decoder.ReadString(&v7, 1, false); err != nil {
 				return
 			}
 
-			if have {
-				err = decoder.ReadInt32(&length, 0, true)
-				if err != nil {
-					return
-				}
-
-				st.Arr4[i6] = make(map[int32]string)
-				for i7, e7 := int32(0), length; i7 < e7; i7++ {
-					var k7 int32
-					var v7 string
-
-					if err = decoder.ReadInt32(&k7, 0, false); err != nil {
-						return
-					}
-
-					if err = decoder.ReadString(&v7, 1, false); err != nil {
-						return
-					}
-
-					st.Arr4[i6][k7] = v7
-				}
-			}
+			st.Arr4[i6][k7] = v7
 		}
-	} else if ty == jce.SimpleList {
-		if err = fmt.Errorf("not support SimpleList type"); err != nil {
-			return
-		}
-	} else {
-		if err = fmt.Errorf("require vector, but not"); err != nil {
-			return
-		}
+
 	}
-	_, err = decoder.SkipTo(jce.MAP, 16, true)
-	if err != nil {
+	// [step 16] read Arr3
+	var length8 uint32
+
+	// [step 16.1] read type、tag
+	if ty, have, err = decoder.ReadHead(16, true); err != nil || !have {
 		return
 	}
-
-	err = decoder.ReadInt32(&length, 0, true)
-	if err != nil {
+	// [step 16.2] read list length
+	if length8, err = decoder.ReadLength(); err != nil {
 		return
 	}
-
-	st.M1 = make(map[string]string)
-	for i8, e8 := int32(0), length; i8 < e8; i8++ {
-		var k8 string
-		var v8 string
-
-		if err = decoder.ReadString(&k8, 0, false); err != nil {
+	// [step 16.3] read data
+	st.Arr3 = make([]base.Request, length8)
+	for i8 := uint32(0); i8 < length8; i8++ {
+		// [step 0] read Arr3[i8]
+		if _, err = st.Arr3[i8].ReadFrom(decoder.Reader()); err != nil {
 			return
 		}
 
-		if err = decoder.ReadString(&v8, 1, false); err != nil {
-			return
-		}
-
-		st.M1[k8] = v8
 	}
+	// [step 17] read M2
+	var length9 uint32
 
-	_, err = decoder.SkipTo(jce.MAP, 17, true)
-	if err != nil {
+	// [step 17.1] read type、tag
+	if ty, have, err = decoder.ReadHead(17, true); err != nil {
 		return
 	}
-
-	err = decoder.ReadInt32(&length, 0, true)
-	if err != nil {
+	// [step 17.2] read length
+	if length9, err = decoder.ReadLength(); err != nil {
 		return
 	}
-
-	st.M2 = make(map[string]base.Request)
-	for i9, e9 := int32(0), length; i9 < e9; i9++ {
-		var k9 string
-		var v9 base.Request
-
+	// [step 17.3] read data
+	st.M2 = make(map[string]base.Request, 0)
+	var k9 string
+	var v9 base.Request
+	for i := uint32(0); i < length9; i++ {
+		// [step 0] read k9
 		if err = decoder.ReadString(&k9, 0, false); err != nil {
 			return
 		}
-
-		err = v9.ReadBlock(decoder, 1, false)
-		if err != nil {
+		// [step 1] read v9
+		if _, err = v9.ReadFrom(decoder.Reader()); err != nil {
 			return
 		}
 
@@ -374,53 +270,15 @@ func (st *RequestPacket) ReadFrom(r io.Reader) (n int64, err error) {
 	}
 
 	_ = err
-	_ = length
 	_ = have
 	_ = ty
 	return
 }
 
-// ReadBlock reads struct from the given tag , require or optional.
-func (st *RequestPacket) ReadBlock(r io.Reader, tag byte, require bool) error {
-	var (
-		err  error
-		have bool
-	)
-
-	decoder := jce.NewDecoder(r)
-
-	st.ResetDefault()
-
-	have, err = decoder.SkipTo(jce.StructBegin, tag, require)
-	if err != nil {
-		return err
-	}
-
-	if !have {
-		if require {
-			return fmt.Errorf("require RequestPacket, but not exist. tag %d", tag)
-		}
-		return nil
-	}
-
-	err = st.ReadFrom(r)
-	if err != nil {
-		return err
-	}
-
-	err = decoder.SkipToStructEnd()
-	if err != nil {
-		return err
-	}
-
-	_ = have
-	return nil
-}
-
 // WriteTo encode struct to io.Writer
 func (st *RequestPacket) WriteTo(w io.Writer) (n int64, err error) {
 	encoder := jce.NewEncoder(w)
-	st.ResetDefault()
+	st.resetDefault()
 
 	// [step 1] write B
 	if err = encoder.WriteInt8(st.B, 1); err != nil {
@@ -476,9 +334,9 @@ func (st *RequestPacket) WriteTo(w io.Writer) (n int64, err error) {
 		return
 	}
 	// [step 12.3] write data
-	for _, v := range st.Arr1 {
-		// [step 0] write v
-		if err = encoder.WriteString(v, 0); err != nil {
+	for _, v12 := range st.Arr1 {
+		// [step 0] write v12
+		if err = encoder.WriteString(v12, 0); err != nil {
 			return
 		}
 	}
@@ -492,41 +350,43 @@ func (st *RequestPacket) WriteTo(w io.Writer) (n int64, err error) {
 		return
 	}
 	// [step 13.3] write data
-	for _, v := range st.Arr2 {
-		// [step 0] write v
+	for _, v13 := range st.Arr2 {
+		// [step 0] write v13
 		// [step 0.1] write type、tag
 		if err = encoder.WriteHead(jce.LIST, 0); err != nil {
 			return
 		}
 		// [step 0.2] write list length
-		if err = encoder.WriteLength(uint32(len(v))); err != nil {
+		if err = encoder.WriteLength(uint32(len(v13))); err != nil {
 			return
 		}
 		// [step 0.3] write data
-		for _, v := range v {
-			// [step 0] write v
-			if err = encoder.WriteString(v, 0); err != nil {
+		for _, v14 := range v13 {
+			// [step 0] write v14
+			if err = encoder.WriteInt32(v14, 0); err != nil {
 				return
 			}
 		}
 	}
-	// [step 14] write Arr3
+	// [step 14] write M1
 	// [step 14.1] write type、tag
-	if err = encoder.WriteHead(jce.LIST, 14); err != nil {
+	if err = encoder.WriteHead(jce.MAP, 14); err != nil {
 		return
 	}
-	// [step 14.2] write list length
-	if err = encoder.WriteLength(uint32(len(st.Arr3))); err != nil {
+	// [step 14.2] write length
+	if err = encoder.WriteLength(uint32(len(st.M1))); err != nil {
 		return
 	}
 	// [step 14.3] write data
-	for _, v := range st.Arr3 {
-		// [step 0] write v
-		err = v.WriteBlock(encoder, 0)
-		if err != nil {
+	for k15, v15 := range st.M1 {
+		// [step 0] write k15
+		if err = encoder.WriteString(k15, 0); err != nil {
 			return
 		}
-
+		// [step 1] write v15
+		if err = encoder.WriteString(v15, 1); err != nil {
+			return
+		}
 	}
 	// [step 15] write Arr4
 	// [step 15.1] write type、tag
@@ -538,96 +398,66 @@ func (st *RequestPacket) WriteTo(w io.Writer) (n int64, err error) {
 		return
 	}
 	// [step 15.3] write data
-	for _, v := range st.Arr4 {
-		// [step 0] write v
-		err = encoder.WriteHead(jce.MAP, 0)
-		if err != nil {
+	for _, v16 := range st.Arr4 {
+		// [step 0] write v16
+		// [step 0.1] write type、tag
+		if err = encoder.WriteHead(jce.MAP, 0); err != nil {
 			return
 		}
-
-		err = encoder.WriteInt32(int32(len(v)), 0)
-		if err != nil {
+		// [step 0.2] write length
+		if err = encoder.WriteLength(uint32(len(v16))); err != nil {
 			return
 		}
-
-		for k10, v10 := range v {
-			// [step 0] write k10
-			if err = encoder.WriteInt32(k10, 0); err != nil {
+		// [step 0.3] write data
+		for k17, v17 := range v16 {
+			// [step 0] write k17
+			if err = encoder.WriteInt32(k17, 0); err != nil {
 				return
 			}
-			// [step 1] write v10
-			if err = encoder.WriteString(v10, 1); err != nil {
+			// [step 1] write v17
+			if err = encoder.WriteString(v17, 1); err != nil {
 				return
 			}
 		}
 	}
-	// [step 16] write M1
-	err = encoder.WriteHead(jce.MAP, 16)
-	if err != nil {
+	// [step 16] write Arr3
+	// [step 16.1] write type、tag
+	if err = encoder.WriteHead(jce.LIST, 16); err != nil {
 		return
 	}
-
-	err = encoder.WriteInt32(int32(len(st.M1)), 0)
-	if err != nil {
+	// [step 16.2] write list length
+	if err = encoder.WriteLength(uint32(len(st.Arr3))); err != nil {
 		return
 	}
-
-	for k11, v11 := range st.M1 {
-		// [step 0] write k11
-		if err = encoder.WriteString(k11, 0); err != nil {
-			return
-		}
-		// [step 1] write v11
-		if err = encoder.WriteString(v11, 1); err != nil {
+	// [step 16.3] write data
+	for _, v18 := range st.Arr3 {
+		// [step 0] write v18
+		if _, err = v18.WriteTo(w); err != nil {
 			return
 		}
 	}
 	// [step 17] write M2
-	err = encoder.WriteHead(jce.MAP, 17)
-	if err != nil {
+	// [step 17.1] write type、tag
+	if err = encoder.WriteHead(jce.MAP, 17); err != nil {
 		return
 	}
-
-	err = encoder.WriteInt32(int32(len(st.M2)), 0)
-	if err != nil {
+	// [step 17.2] write length
+	if err = encoder.WriteLength(uint32(len(st.M2))); err != nil {
 		return
 	}
-
-	for k12, v12 := range st.M2 {
-		// [step 0] write k12
-		if err = encoder.WriteString(k12, 0); err != nil {
+	// [step 17.3] write data
+	for k19, v19 := range st.M2 {
+		// [step 0] write k19
+		if err = encoder.WriteString(k19, 0); err != nil {
 			return
 		}
-		// [step 1] write v12
-		err = v12.WriteBlock(encoder, 1)
-		if err != nil {
+		// [step 1] write v19
+		if _, err = v19.WriteTo(w); err != nil {
 			return
 		}
-
 	}
 
 	// flush to io.Writer
 	err = encoder.Flush()
-	return
-}
-
-// WriteBlock encode struct
-func (st *RequestPacket) WriteBlock(w io.Writer, tag byte) (err error) {
-	encoder := jce.NewEncoder(w)
-
-	st.ResetDefault()
-
-	if err = encoder.WriteHead(jce.StructBegin, tag); err != nil {
-		return
-	}
-
-	if err = st.WriteTo(w); err != nil {
-		return
-	}
-
-	if err = encoder.WriteHead(jce.StructEnd, 0); err != nil {
-		return
-	}
-
 	return
 }

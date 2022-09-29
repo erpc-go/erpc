@@ -11,6 +11,8 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/edte/jce2go/log"
 )
 
 // 全局 map 避免重复生成
@@ -59,7 +61,7 @@ func (gen *Generate) Gen() {
 	// recover  panic
 	defer func() {
 		if err := recover(); err != nil {
-			fmt.Println(err)
+			log.Raw(err)
 			os.Exit(1)
 		}
 	}()
@@ -67,11 +69,8 @@ func (gen *Generate) Gen() {
 	// 解析文件
 	gen.p = ParseFile(gen.filepath, make([]string, 0))
 
-	if debug {
-		fmt.Println()
-		b, _ := json.Marshal(gen.p)
-		fmt.Println(string(b))
-	}
+	b, _ := json.Marshal(gen.p)
+	log.Debugf(string(b))
 
 	// 开始代码生成
 	gen.genAll()
@@ -131,10 +130,10 @@ import (
 	// [step 4] 写占位
 	gen.writeString(`)
 
-    // 占位使用，避免导入的这些包没有被使用
-	var _ = fmt.Errorf
-    var _ = io.ReadFull
-    var _ = jce.BYTE
+// 占位使用，避免导入的这些包没有被使用
+var _ = fmt.Errorf
+var _ = io.ReadFull
+var _ = jce.BYTE
 
 `)
 
@@ -278,10 +277,7 @@ func (gen *Generate) genStruct(st *StructInfo) {
 	gen.genFunResetDefault(st)
 
 	gen.genFunReadFrom(st)
-	gen.genFunReadBlock(st)
-
 	gen.genFunWriteTo(st)
-	gen.genFunWriteBlock(st)
 }
 
 // 生成 struct 的定义
@@ -304,11 +300,11 @@ func (gen *Generate) genStructDefine(st *StructInfo) {
 
 // 生成 struct optional 成员的默认赋值
 func (gen *Generate) genFunResetDefault(st *StructInfo) {
-	gen.writeString("func (st *" + st.Name + ") ResetDefault() {\n")
+	gen.writeString("\nfunc (st *" + st.Name + ") resetDefault() {\n")
 
 	for _, v := range st.Member {
 		if v.Type.CType == tkStruct {
-			gen.writeString("st." + v.Key + ".ResetDefault()\n")
+			gen.writeString("st." + v.Key + ".resetDefault()\n")
 		}
 		if v.Default == "" {
 			continue
@@ -321,26 +317,24 @@ func (gen *Generate) genFunResetDefault(st *StructInfo) {
 
 // 实现反序列化
 func (gen *Generate) genFunReadFrom(st *StructInfo) {
-	gen.writeString(`// ReadFrom reads from io.Reader and put into struct.
+	gen.writeString("\n" + `// ReadFrom reads from io.Reader and put into struct.
 func (st *` + st.Name + `) ReadFrom(r io.Reader) (n int64, err error) {
 	var (
-		length int32
 		have bool
 		ty jce.JceEncodeType
 	)
 
     decoder := jce.NewDecoder(r)
-	st.ResetDefault()
+	st.resetDefault()
 
 `)
 
 	for _, v := range st.Member {
-		gen.genReadVar(&v, "st.", false)
+		gen.genReadVar(&v, "st.")
 	}
 
 	gen.code.WriteString(`
 	_ = err
-	_ = length
 	_ = have
 	_ = ty
 	return 
@@ -349,14 +343,21 @@ func (st *` + st.Name + `) ReadFrom(r io.Reader) (n int64, err error) {
 }
 
 // 生成 struct 的成员
-func (gen *Generate) genReadVar(v *StructMember, prefix string, hasRet bool) {
+func (gen *Generate) genReadVar(v *StructMember, prefix string) {
+	gen.writeString("    // [step " + strconv.Itoa(int(v.Tag)) + "] read " + v.Key)
+
+	require := "false"
+	if v.Require {
+		require = "true"
+	}
+
 	switch v.Type.Type {
 	case tkTVector:
-		gen.genReadVector(v, prefix, hasRet)
+		gen.genReadVector(v, prefix)
 	case tkTArray:
-		gen.genReadVector(v, prefix, hasRet)
+		gen.genReadVector(v, prefix)
 	case tkTMap:
-		gen.genReadMap(v, prefix, hasRet)
+		gen.genReadMap(v, prefix)
 	case tkName: //TODO: 这是啥？
 		if v.Type.CType == tkEnum {
 			require := "false"
@@ -365,216 +366,132 @@ func (gen *Generate) genReadVar(v *StructMember, prefix string, hasRet bool) {
 			}
 
 			gen.writeString(`
-err = decoder.ReadInt32((*int32)(&` + prefix + v.Key + `),` + strconv.Itoa(int(v.Tag)) + `, ` + require + `)
-` + errString(hasRet) + `
+    if err = decoder.ReadInt32((*int32)(&` + prefix + v.Key + `),` + strconv.Itoa(int(v.Tag)) + `, ` + require + `); err !=nil {
+        return
+    }
 `)
+			return
 
-		} else {
-			// fmt.Println(v)
-
-			gen.genReadStruct(v, prefix, hasRet)
 		}
+
+		gen.writeString(`
+    if _, err = ` + prefix + v.Key + `.ReadFrom(decoder.Reader()); err !=nil {
+        return
+    }
+`)
 
 	default: // 默认基础类型，即非 list、map、
-		require := "false"
-		if v.Require {
-			require = "true"
+		gen.writeString(`
+    if err = decoder.Read` + upperFirstLetter(gen.genType(v.Type)) + `(&` + prefix + v.Key + `, ` + strconv.Itoa(int(v.Tag)) + `, ` + require + `); err != nil {
+        return         
+    }
+`)
+	}
+}
+
+// 序列化 vector
+func (gen *Generate) genReadVector(mb *StructMember, prefix string) {
+	tag := strconv.Itoa(int(mb.Tag))
+	vc := strconv.Itoa(gen.vc)
+	gen.vc++
+
+	require := "false"
+	if mb.Require {
+		require = "true"
+	}
+
+	// SimpleList
+	if mb.Type.TypeK.Type == tkTByte {
+		if mb.Type.TypeK.Unsigned {
+			gen.writeString(`
+    if err = decoder.ReadSliceUint8(&` + gen.genVariableName(prefix, mb.Key) + `,` + tag + `,` + require + `); err != nil {
+        return
+    }
+`)
+			return
 		}
 
 		gen.writeString(`
-if err = decoder.Read` + upperFirstLetter(gen.genType(v.Type)) + `(&` + prefix + v.Key + `, ` + strconv.Itoa(int(v.Tag)) + `, ` + require + `); err != nil {
-    return         
-}
+    if err = decoder.ReadSliceInt8(&` + gen.genVariableName(prefix, mb.Key) + `,` + tag + `,` + require + `); err != nil {
+        return
+    }
 `)
+		return
 	}
+
+	// LIST
+	gen.writeString(`
+    var length` + vc + ` uint32
+
+    // [step ` + strconv.Itoa(int(mb.Tag)) + `.1] read type、tag        
+    if ty, have, err = decoder.ReadHead(` + tag + `,` + require + ` );err != nil || !have {
+        return
+    } 
+    // [step ` + strconv.Itoa(int(mb.Tag)) + `.2] read list length        
+    if length` + vc + `, err = decoder.ReadLength(); err !=nil {
+        return
+    }
+    // [step ` + strconv.Itoa(int(mb.Tag)) + `.3] read data        
+    ` + gen.genVariableName(prefix, mb.Key) + ` = make(` + gen.genType(mb.Type) + `, length` + vc + `)`)
+
+	gen.writeString(`  
+    for i` + vc + `:= uint32(0); i` + vc + `< length` + vc + `; i` + vc + `++ {
+`)
+
+	dummy := &StructMember{
+		Type: mb.Type.TypeK,
+		Key:  mb.Key + "[i" + vc + "]",
+	}
+
+	gen.genReadVar(dummy, prefix)
+
+	gen.writeString(`
+	}
+	`)
 }
 
-func (gen *Generate) genReadVector(mb *StructMember, prefix string, hasRet bool) {
-	// fmt.Println(mb)
-
-	tag := strconv.Itoa(int(mb.Tag))
-	vc := strconv.Itoa(gen.vc)
-	gen.vc++
-
+// 反序列化 map
+func (gen *Generate) genReadMap(mb *StructMember, prefix string) {
 	require := "false"
 	if mb.Require {
 		require = "true"
 	}
-
-	if require == "false" {
-		gen.writeString(`
-ty, have, err = decoder.ReadHead(` + tag + `,` + require + `)
-    if err != nil {
-        return
-    }
-` + `
-if have {`)
-	} else {
-		gen.writeString(`
-ty, _, err = decoder.ReadHead(` + tag + `,` + require + `)
-    if err != nil {
-        return
-    }
-`)
-	}
+	vc := strconv.Itoa(gen.vc)
+	gen.vc++
 
 	gen.writeString(`
-if ty == jce.LIST {
-	if err = decoder.ReadInt32(&length, 0, true); err != nil {
+    var length` + vc + ` uint32
+
+    // [step ` + strconv.Itoa(int(mb.Tag)) + `.1] read type、tag
+    if ty, have, err = decoder.ReadHead(` + strconv.Itoa(int(mb.Tag)) + "," + require + `); err != nil {
+        return
+    }
+    // [step ` + strconv.Itoa(int(mb.Tag)) + `.2] read length
+    if length` + vc + `, err = decoder.ReadLength(); err != nil {
         return
     }        
-` + gen.genVariableName(prefix, mb.Key) + ` = make(` + gen.genType(mb.Type) + `, length)
-  ` + genForHead(vc) + `{
-`)
-
-	dummy := &StructMember{}
-	dummy.Type = mb.Type.TypeK
-	dummy.Key = mb.Key + "[i" + vc + "]"
-	gen.genReadVar(dummy, prefix, hasRet)
-
-	gen.writeString(`}
-} else if ty == jce.SimpleList {
-`)
-
-	if mb.Type.TypeK.Type == tkTByte {
-		gen.genReadSimpleList(mb, prefix, hasRet)
-	} else {
-		gen.writeString(`if err = fmt.Errorf("not support SimpleList type"); err != nil {
-    return 
-}`)
-	}
-
-	gen.writeString(`
-} else {
-    if err = fmt.Errorf("require vector, but not"); err != nil {
-        return
-    }
-}`)
-
-	if require == "false" {
-		gen.writeString("}\n")
-	}
-}
-
-func (gen *Generate) genReadSimpleList(mb *StructMember, prefix string, hasRet bool) {
-	unsign := "Int8"
-
-	if mb.Type.TypeK.Unsigned {
-		unsign = "Uint8"
-	}
-
-	errStr := errString(hasRet)
-
-	gen.writeString(`
-_, err = decoder.SkipTo(jce.BYTE, 0, true)
-` + errStr + `
-err = decoder.ReadInt32(&length, 0, true)
-` + errStr + `
-err = decoder.ReadSlice` + unsign + `(&` + prefix + mb.Key + `, length, true)
-` + errStr + `
-`)
-}
-
-func (gen *Generate) genReadStruct(mb *StructMember, prefix string, hasRet bool) {
-	tag := strconv.Itoa(int(mb.Tag))
-	require := "false"
-	if mb.Require {
-		require = "true"
-	}
-	gen.writeString(`
-err = ` + prefix + mb.Key + `.ReadBlock(decoder, ` + tag + `, ` + require + `)
-` + errString(hasRet) + `
-`)
-}
-
-func (gen *Generate) genReadMap(mb *StructMember, prefix string, hasRet bool) {
-	tag := strconv.Itoa(int(mb.Tag))
-	errStr := errString(hasRet)
-	vc := strconv.Itoa(gen.vc)
-	gen.vc++
-	require := "false"
-	if mb.Require {
-		require = "true"
-	}
-
-	if require == "false" {
-		gen.writeString(`
-have, err = decoder.SkipTo(jce.MAP, ` + tag + `, ` + require + `)
-` + errStr + `
-if have {`)
-	} else {
-		gen.writeString(`
-_, err = decoder.SkipTo(jce.MAP, ` + tag + `, ` + require + `)
-` + errStr + `
-`)
-	}
-
-	gen.writeString(`
-err = decoder.ReadInt32(&length, 0, true)
-` + errStr + `
-` + gen.genVariableName(prefix, mb.Key) + ` = make(` + gen.genType(mb.Type) + `)
-` + genForHead(vc) + `{
+    // [step ` + strconv.Itoa(int(mb.Tag)) + `.3] read data
+    ` + gen.genVariableName(prefix, mb.Key) + ` = make(` + gen.genType(mb.Type) + `, 0)` + `
 	var k` + vc + ` ` + gen.genType(mb.Type.TypeK) + `
-	var v` + vc + ` ` + gen.genType(mb.Type.TypeV) + `
+	var v` + vc + ` ` + gen.genType(mb.Type.TypeV) + `        
+    for i := uint32(0);i < length` + vc + `; i++ {
 `)
 
-	dummy := &StructMember{}
-	dummy.Type = mb.Type.TypeK
-	dummy.Key = "k" + vc
-	gen.genReadVar(dummy, "", hasRet)
+	dummy := &StructMember{
+		Type: mb.Type.TypeK,
+		Key:  "k" + vc,
+	}
+	gen.genReadVar(dummy, "")
 
-	dummy = &StructMember{}
-	dummy.Type = mb.Type.TypeV
-	dummy.Key = "v" + vc
-	dummy.Tag = 1
-
-	gen.genReadVar(dummy, "", hasRet)
+	dummy = &StructMember{
+		Type: mb.Type.TypeV,
+		Key:  "v" + vc,
+		Tag:  1,
+	}
+	gen.genReadVar(dummy, "")
 
 	gen.writeString(`
 	` + prefix + mb.Key + `[k` + vc + `] = v` + vc + `
-}
-`)
-	if require == "false" {
-		gen.writeString("}\n")
-	}
-}
-
-func (gen *Generate) genFunReadBlock(st *StructInfo) {
-	gen.writeString(`// ReadBlock reads struct from the given tag , require or optional.
-func (st *` + st.Name + `) ReadBlock(r io.Reader, tag byte, require bool) error {
-	var (
-		err error
-		have bool
-	)
-
-    decoder := jce.NewDecoder(r)
-
-	st.ResetDefault()
-
-	have, err = decoder.SkipTo(jce.StructBegin, tag, require)
-	if err != nil {
-		return err
-	}
-
-	if !have {
-		if require {
-			return fmt.Errorf("require ` + st.Name + `, but not exist. tag %d", tag)
-		}
-		return nil
-	}
-
-  	err = st.ReadFrom(r)
-  	if err != nil {
-		return err
-	}
-
-	err = decoder.SkipToStructEnd()
-	if err != nil {
-		return err
-	}
-
-	_ = have
-	return nil
 }
 `)
 }
@@ -588,7 +505,7 @@ func (gen *Generate) genFunWriteTo(st *StructInfo) {
 	gen.writeString(`// WriteTo encode struct to io.Writer 
 func (st *` + st.Name + `) WriteTo(w io.Writer) (n int64, err error) {
     encoder := jce.NewEncoder(w)
-	st.ResetDefault()
+	st.resetDefault()
 
 `)
 
@@ -606,31 +523,32 @@ func (st *` + st.Name + `) WriteTo(w io.Writer) (n int64, err error) {
 
 // 序列化 struct 成员
 func (gen *Generate) genWriteVar(v *StructMember, prefix string, hasRet bool) {
+	gen.writeString("// [step " + strconv.Itoa(int(v.Tag)) + "] write " + v.Key)
+
 	switch v.Type.Type {
 	case tkTVector:
-		gen.writeString("// [step " + strconv.Itoa(int(v.Tag)) + "] write " + v.Key)
 		gen.genWriteVector(v, prefix, hasRet)
 	case tkTArray:
-		gen.writeString("// [step " + strconv.Itoa(int(v.Tag)) + "] write " + v.Key)
 		gen.genWriteVector(v, prefix, hasRet)
 	case tkTMap:
-		gen.writeString("// [step " + strconv.Itoa(int(v.Tag)) + "] write " + v.Key)
 		gen.genWriteMap(v, prefix, hasRet)
 	case tkName: // TODO: ?
-		gen.writeString("// [step " + strconv.Itoa(int(v.Tag)) + "] write " + v.Key)
-
 		if v.Type.CType == tkEnum {
-			// tkEnum enumeration processing
-			tag := strconv.Itoa(int(v.Tag))
 			gen.writeString(`
-err = encoder.WriteInt32(int32(` + gen.genVariableName(prefix, v.Key) + `),` + tag + `)
-` + errString(hasRet) + `
+            if err = encoder.WriteInt32(int32(` + gen.genVariableName(prefix, v.Key) + `),` + strconv.Itoa(int(v.Tag)) + `); err !=nil {
+                return
+            }
 `)
-		} else {
-			gen.genWriteStruct(v, prefix, hasRet)
+			return
 		}
+
+		gen.writeString(`
+        if _, err = ` + prefix + v.Key + `.WriteTo(w); err != nil {
+            return
+        }
+`)
+
 	default: // 默认基础类型
-		gen.writeString("// [step " + strconv.Itoa(int(v.Tag)) + "] write " + v.Key)
 		gen.writeString(`
 if err = encoder.Write` + upperFirstLetter(gen.genType(v.Type)) + `(` + gen.genVariableName(prefix, v.Key) + `, ` + strconv.Itoa(int(v.Tag)) + `); err != nil {
     return
@@ -641,6 +559,9 @@ if err = encoder.Write` + upperFirstLetter(gen.genType(v.Type)) + `(` + gen.genV
 
 // 序列化数组
 func (gen *Generate) genWriteVector(mb *StructMember, prefix string, hasRet bool) {
+	vc := strconv.Itoa(gen.vc)
+	gen.vc++
+
 	// SimpleList
 	if mb.Type.TypeK.Type == tkTByte {
 		tag := strconv.Itoa(int(mb.Tag))
@@ -679,12 +600,12 @@ if err = encoder.WriteLength(uint32(len(` + gen.genVariableName(prefix, mb.Key) 
     return
 }
 // [step ` + strconv.Itoa(int(mb.Tag)) + `.3] write data 
-    for _, v := range ` + gen.genVariableName(prefix, mb.Key) + ` {
+    for _, v` + vc + ` := range ` + gen.genVariableName(prefix, mb.Key) + ` {
 `)
 
 	dummy := &StructMember{
 		Type: mb.Type.TypeK,
-		Key:  "v",
+		Key:  "v" + vc,
 	}
 
 	gen.genWriteVar(dummy, "", hasRet)
@@ -692,73 +613,44 @@ if err = encoder.WriteLength(uint32(len(` + gen.genVariableName(prefix, mb.Key) 
 	gen.writeString("}\n")
 }
 
-func (gen *Generate) genWriteStruct(mb *StructMember, prefix string, hasRet bool) {
-	tag := strconv.Itoa(int(mb.Tag))
-	gen.writeString(`
-err = ` + prefix + mb.Key + `.WriteBlock(encoder, ` + tag + `)
-` + errString(hasRet) + `
-`)
-}
-
+// 序列化 map
 func (gen *Generate) genWriteMap(mb *StructMember, prefix string, hasRet bool) {
-	tag := strconv.Itoa(int(mb.Tag))
 	vc := strconv.Itoa(gen.vc)
 	gen.vc++
-	errStr := errString(hasRet)
+
 	gen.writeString(`
-err = encoder.WriteHead(jce.MAP, ` + tag + `)
-` + errStr + `
-err = encoder.WriteInt32(int32(len(` + gen.genVariableName(prefix, mb.Key) + `)), 0)
-` + errStr + `
+// [step ` + strconv.Itoa(int(mb.Tag)) + `.1] write type、tag
+if err = encoder.WriteHead(jce.MAP, ` + strconv.Itoa(int(mb.Tag)) + `); err != nil {
+    return
+}
+// [step ` + strconv.Itoa(int(mb.Tag)) + `.2] write length
+if err = encoder.WriteLength(uint32(len(` + gen.genVariableName(prefix, mb.Key) + `))); err != nil {
+    return
+}
+// [step ` + strconv.Itoa(int(mb.Tag)) + `.3] write data
 for k` + vc + `, v` + vc + ` := range ` + gen.genVariableName(prefix, mb.Key) + ` {
 `)
-	// for _, v := range can nesting for _, v := range，does not conflict, support multidimensional arrays
 
-	dummy := &StructMember{}
-	dummy.Type = mb.Type.TypeK
-	dummy.Key = "k" + vc
+	// write key
+	dummy := &StructMember{
+		Type: mb.Type.TypeK,
+		Key:  "k" + vc,
+	}
 	gen.genWriteVar(dummy, "", hasRet)
 
-	dummy = &StructMember{}
-	dummy.Type = mb.Type.TypeV
-	dummy.Key = "v" + vc
-	dummy.Tag = 1
+	// write value
+	dummy = &StructMember{
+		Type: mb.Type.TypeV,
+		Key:  "v" + vc,
+		Tag:  1,
+	}
 	gen.genWriteVar(dummy, "", hasRet)
 
 	gen.writeString("}\n")
-}
-
-func (gen *Generate) genFunWriteBlock(st *StructInfo) {
-	// WriteBlock function head
-	gen.writeString(`// WriteBlock encode struct
-func (st *` + st.Name + `) WriteBlock(w io.Writer, tag byte) (err error) {
-    encoder := jce.NewEncoder(w)
-
-    st.ResetDefault()        
-
-	if err = encoder.WriteHead(jce.StructBegin, tag);err != nil {
-        return
-    }
-
-	if err = st.WriteTo(w);err != nil {
-        return
-    }
-
-	if err = encoder.WriteHead(jce.StructEnd, 0);err!=nil {
-        return 
-    }
-
-	return
-}
-`)
 }
 
 func (gen *Generate) saveFiles() {
-	if debug {
-		fmt.Println("------------------------------------------------------")
-		fmt.Println(gen.code.String())
-		fmt.Println("------------------------------------------------------")
-	}
+	log.Debugf(gen.code.String())
 
 	filename := gen.p.ProtoName + ".jce.go"
 
@@ -776,24 +668,6 @@ func (gen *Generate) saveFiles() {
 	if err = ioutil.WriteFile(mkPath+"/"+filename, beauty, 0666); err != nil {
 		panic(err.Error())
 	}
-}
-
-func errString(hasRet bool) string {
-	var retStr string
-	if hasRet {
-		retStr = "return ret, err"
-	} else {
-		retStr = "return"
-	}
-	return `if err != nil {
-  ` + retStr + `
-  }` + "\n"
-}
-
-func genForHead(vc string) string {
-	i := `i` + vc
-	e := `e` + vc
-	return ` for ` + i + `,` + e + ` := int32(0), length;` + i + `<` + e + `;` + i + `++ `
 }
 
 func (gen *Generate) genVariableName(prefix, name string) string {

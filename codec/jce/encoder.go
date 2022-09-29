@@ -279,23 +279,23 @@ func (e *Encoder) WriteString(data string, tag byte) (err error) {
 // 暂时就写死 4B
 
 // []uint8 类型的序列化，方案如下：
-// ---------------------------------------------------
-// | simpleList head | data type | data length | data |
-// ---------------------------------------------------
+// ----------------------------------------------------
+// | simpleList head | data length | data type | data |
+// ----------------------------------------------------
 func (e *Encoder) WriteSliceUint8(data []uint8, tag byte) (err error) {
 	// [step 1] 写 simpleList type、tag
 	if err = e.WriteHead(SimpleList, tag); err != nil {
 		return fmt.Errorf("write head failed, type:%s, tag:%d ,err: %s", SimpleList, tag, err)
 	}
 
-	// [step 2] 写 list 里的类型
-	if err = e.writeByte(uint8(BYTE)); err != nil {
-		return fmt.Errorf("write list item data type failed, type:%s, tag:%d ,err: %s", BYTE, tag, err)
-	}
-
-	// [step 3] 写数据长度
+	// [step 2] 写数据长度
 	if err = e.writeByte4(uint32(len(data))); err != nil {
 		return fmt.Errorf("write list length failed, tag:%d ,err: %s", tag, err)
+	}
+
+	// [step 3] 写 list 里的类型
+	if err = e.writeByte(uint8(BYTE)); err != nil {
+		return fmt.Errorf("write list item data type failed, type:%s, tag:%d ,err: %s", BYTE, tag, err)
 	}
 
 	// [step 4] 写数据

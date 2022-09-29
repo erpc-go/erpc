@@ -434,7 +434,13 @@ func (d *Decoder) ReadSliceUint8(data *[]uint8, tag byte, require bool) (err err
 		return fmt.Errorf("need simpleList type, but %s, tag:%d", t, tag)
 	}
 
-	// [setp 2] 读 item type
+	// [step 2] 读数据长度
+	length, err := d.readByte4()
+	if err != nil {
+		return fmt.Errorf("read data item length failed, tag:%d, err:%s", tag, err)
+	}
+
+	// [setp 3] 读 item type
 	itemType, err := d.readByte()
 	if err != nil {
 		return fmt.Errorf("read item type failed, tag:%d, err:%s", tag, err)
@@ -442,12 +448,6 @@ func (d *Decoder) ReadSliceUint8(data *[]uint8, tag byte, require bool) (err err
 
 	if JceEncodeType(itemType) != BYTE {
 		return fmt.Errorf("need BYTE byte when read []uint8, tag:%d", tag)
-	}
-
-	// [step 3] 读数据长度
-	length, err := d.readByte4()
-	if err != nil {
-		return fmt.Errorf("read data item length failed, tag:%d, err:%s", tag, err)
 	}
 
 	// [setp 4] 读数据
@@ -471,6 +471,10 @@ func (d *Decoder) ReadSliceInt8(data *[]int8, tag byte, require bool) (err error
 // 反序列化一个长度字段
 func (d *Decoder) ReadLength() (length uint32, err error) {
 	return d.readByte4()
+}
+
+func (d *Decoder) ReadByte() (b byte, err error) {
+	return d.readByte()
 }
 
 // ---------------------------------------------------------------------------
@@ -582,6 +586,11 @@ func (d *Decoder) unreadHead(curTag byte) {
 	if curTag >= 15 {
 		_ = d.buf.UnreadByte()
 	}
+}
+
+// return reader
+func (d *Decoder) Reader() (reader *bufio.Reader) {
+	return d.buf
 }
 
 // 跳过 type 类型个字节, 不包括 head 部分

@@ -3,6 +3,8 @@ package main
 import (
 	"flag"
 	"path"
+
+	"github.com/edte/jce2go/log"
 )
 
 var (
@@ -24,13 +26,16 @@ func main() {
 
 	flag.Parse()
 
+	if debug {
+		log.StartDebug()
+	}
+
 	for _, filename := range flag.Args() {
 		if path.Ext(filename) != ".jce" {
 			continue
 		}
-		// fmt.Println("--------------------")
-		// fmt.Println(filename)
-		// fmt.Println("--------------------")
+
+		// log.Debugf("begin parse file, name: %s", filename)
 
 		gen := NewGenerate(filename, modulePath, outdir)
 		gen.Gen()
