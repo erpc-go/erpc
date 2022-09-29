@@ -170,7 +170,7 @@ func (d *Decoder) ReadInt32(data *int32, tag byte, require bool) (err error) {
 		return
 	case INT: // 4 byte
 		var tmp uint32
-		tmp, err = d.readBytes4()
+		tmp, err = d.readByte4()
 		if err != nil {
 			return fmt.Errorf("read data failed, when int32'data length is 4byte, err:%s", err)
 		}
@@ -216,7 +216,7 @@ func (d *Decoder) ReadInt64(data *int64, tag byte, require bool) (err error) {
 		return
 	case INT: // 4B
 		var tmp uint32
-		tmp, err = d.readBytes4()
+		tmp, err = d.readByte4()
 		if err != nil {
 			return fmt.Errorf("read data failed, when int64'data length is 4byte, err:%s", err)
 		}
@@ -294,7 +294,7 @@ func (d *Decoder) ReadFloat32(data *float32, tag byte, require bool) (err error)
 		return
 	case FLOAT: // 4B
 		var tmp uint32
-		tmp, err = d.readBytes4()
+		tmp, err = d.readByte4()
 		if err != nil {
 			return fmt.Errorf("read data failed, when float32'data length is 4byte, err:%s", err)
 		}
@@ -401,7 +401,7 @@ func (d *Decoder) ReadString(data *string, tag byte, require bool) (err error) {
 		var buff []byte
 
 		// [step 2.2.1] 读长度
-		if length, err = d.readBytes4(); err != nil {
+		if length, err = d.readByte4(); err != nil {
 			return fmt.Errorf("read string4' length failed, tag,:%d error:%v", tag, err)
 		}
 
@@ -445,7 +445,7 @@ func (d *Decoder) ReadSliceUint8(data *[]uint8, tag byte, require bool) (err err
 	}
 
 	// [step 3] 读数据长度
-	length, err := d.readBytes4()
+	length, err := d.readByte4()
 	if err != nil {
 		return fmt.Errorf("read data item length failed, tag:%d, err:%s", tag, err)
 	}
@@ -466,6 +466,11 @@ func (d *Decoder) ReadSliceInt8(data *[]int8, tag byte, require bool) (err error
 	}
 	*data = *(*[]int8)(unsafe.Pointer(&tmp))
 	return
+}
+
+// 反序列化一个长度字段
+func (d *Decoder) ReadLength() (length uint32, err error) {
+	return d.readByte4()
 }
 
 // ---------------------------------------------------------------------------
@@ -512,7 +517,7 @@ func (d *Decoder) readByte2() (data uint16, err error) {
 // 读取 4 个字节
 //
 //go:nosplit
-func (d *Decoder) readBytes4() (data uint32, err error) {
+func (d *Decoder) readByte4() (data uint32, err error) {
 	// [step 1] 建立缓冲区
 	b := make([]byte, 4)
 
@@ -643,7 +648,7 @@ func (d *Decoder) skipFieldString1() (err error) {
 //go:nosplit
 func (d *Decoder) skipFieldString4() (err error) {
 	// [step 1] 读 4 字节表示长度
-	l, err := d.readBytes4()
+	l, err := d.readByte4()
 	if err != nil {
 		return err
 	}
@@ -656,7 +661,7 @@ func (d *Decoder) skipFieldString4() (err error) {
 //go:nosplit
 func (d *Decoder) skipFieldMap() (err error) {
 	// [step 1] 读 item 的 长度
-	length, err := d.readBytes4()
+	length, err := d.readByte4()
 	if err != nil {
 		return err
 	}
@@ -686,7 +691,7 @@ func (d *Decoder) skipFieldMap() (err error) {
 //go:nosplit
 func (d *Decoder) skipFieldList() (err error) {
 	// [step 1] 读长度
-	length, err := d.readBytes4()
+	length, err := d.readByte4()
 	if err != nil {
 		return err
 	}
@@ -722,7 +727,7 @@ func (d *Decoder) skipFieldSimpleList() error {
 	}
 
 	// [step 2] 读数据长度
-	length, err := d.readBytes4()
+	length, err := d.readByte4()
 	if err != nil {
 		return err
 	}

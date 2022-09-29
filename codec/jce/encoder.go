@@ -237,6 +237,8 @@ func (e *Encoder) WriteBool(data bool, tag byte) (err error) {
 	return e.WriteInt8(tmp, tag)
 }
 
+// TODO: 这里看是不是增加一种情况，只写 data 就行，而不用写什么 tag
+// 主要是 vector<string> 这种情况，写内部 string 时，也每次都写了个 tag，都默认是 0，感觉不太好，这个是无效信息
 // 序列化 string
 // 方案如下：
 // |---------------------------------------|
@@ -303,6 +305,13 @@ func (e *Encoder) WriteSliceUint8(data []uint8, tag byte) (err error) {
 // []int8 类型的序列化，同 []uint8
 func (e *Encoder) WriteSliceInt8(data []int8, tag byte) (err error) {
 	return e.WriteSliceUint8(*(*[]uint8)(unsafe.Pointer(&data)), tag)
+}
+
+// 序列化一个长度字段
+// TODO: 这里看能不能优化一下长度字段？看怎么重新设计一下，把 list、map、string 等都优化在一起
+// 现在默认直接用 4B 来表示长度
+func (e *Encoder) WriteLength(length uint32) (err error) {
+	return e.writeByte4(length)
 }
 
 // 将缓存刷新到 writer 中，最后都要手动调这个函数

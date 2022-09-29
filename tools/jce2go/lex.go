@@ -137,41 +137,19 @@ type LexState struct {
 	current    byte
 	lineNumber int
 
-	//t         Token
-	//lookahead Token
-
 	tokenBuff bytes.Buffer
 	buff      *bytes.Buffer
 
 	source string
 }
 
-func isNewLine(b byte) bool {
-	return b == '\r' || b == '\n'
-}
-
-func isNumber(b byte) bool {
-	return (b >= '0' && b <= '9') || b == '-'
-}
-
-func isHexNumber(b byte) bool {
-	return (b >= 'a' && b <= 'f') || (b >= 'A' && b <= 'F')
-}
-
-func isLetter(b byte) bool {
-	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || b == '_'
-}
-
-func isType(t TK) bool {
-	return t > tkDummyTypeBegin && t < tkDummyTypeEnd
-}
-
-func isNumberType(t TK) bool {
-	switch t {
-	case tkTInt, tkTBool, tkTShort, tkTByte, tkTLong, tkTFloat, tkTDouble:
-		return true
-	default:
-		return false
+// NewLexState to update LexState struct.
+func NewLexState(source string, buff []byte) *LexState {
+	return &LexState{
+		current:    ' ',
+		lineNumber: 1,
+		source:     source,
+		buff:       bytes.NewBuffer(buff),
 	}
 }
 
@@ -408,12 +386,31 @@ func (ls *LexState) NextToken() *Token {
 	return tk
 }
 
-// NewLexState to update LexState struct.
-func NewLexState(source string, buff []byte) *LexState {
-	return &LexState{
-		current:    ' ',
-		lineNumber: 1,
-		source:     source,
-		buff:       bytes.NewBuffer(buff),
+func isNewLine(b byte) bool {
+	return b == '\r' || b == '\n'
+}
+
+func isNumber(b byte) bool {
+	return (b >= '0' && b <= '9') || b == '-'
+}
+
+func isHexNumber(b byte) bool {
+	return (b >= 'a' && b <= 'f') || (b >= 'A' && b <= 'F')
+}
+
+func isLetter(b byte) bool {
+	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || b == '_'
+}
+
+func isType(t TK) bool {
+	return t > tkDummyTypeBegin && t < tkDummyTypeEnd
+}
+
+func isNumberType(t TK) bool {
+	switch t {
+	case tkTInt, tkTBool, tkTShort, tkTByte, tkTLong, tkTFloat, tkTDouble:
+		return true
+	default:
+		return false
 	}
 }

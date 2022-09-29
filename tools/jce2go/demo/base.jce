@@ -9,9 +9,9 @@ module base
     const short ERPC_VERSION   = 0x01;
     const int   TUP_VERSION    = 0x03;
 
-    struct A
+    struct request
     {
 
-        1  require byte   a; 
+        1  require byte   b; 
     };
 };

@@ -1,13 +1,13 @@
 run : jce2go
-	./jce2go -o test2go -mod github.com/edte/jce2go  test/*
+	./jce2go -o demo2go -mod github.com/edte/jce2go  demo/*
 
 debug : jce2go
-	./jce2go -o test2go -mod github.com/edte/jce2go  -debug test/*
+	./jce2go -o demo2go -mod github.com/edte/jce2go  -debug demo/*
 
-jce2go : gen_go.go lex.go main.go parse.go version.go
+jce2go : generate.go lex.go main.go parse.go version.go
 	go build .
 
-build : gen_go.go lex.go main.go parse.go version.go
+build : generate.go lex.go main.go parse.go version.go
 	go build .
 
 update :
@@ -21,6 +21,6 @@ h : jce2go
 	./jce2go -h
 
 clean :
-	rm -rf test2go
+	rm -rf demo2go
 
 .PHONY : clean jce2go

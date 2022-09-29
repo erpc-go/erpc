@@ -8,6 +8,72 @@ import (
 	"strings"
 )
 
+// Parse record information of parse file.
+type Parse struct {
+	Source string // 源文件
+
+	Module   string   // 包名
+	Includes []string // 依赖的其他 jce 文件
+
+	Structs []StructInfo // struct list
+	Enums   []EnumInfo   // enum list
+	Consts  []ConstInfo  // const list
+
+	// have parsed include file
+	IncParse []*Parse
+
+	lex   *LexState
+	t     *Token
+	lastT *Token
+
+	// jce include chain
+	IncChain []string
+
+	// proto file name(not include .jce)
+	ProtoName string
+
+	fileNames map[string]bool
+}
+
+func newParse(s string, b []byte, incChain []string) *Parse {
+	p := &Parse{
+		Source:    s,
+		ProtoName: path2ProtoName(s),
+	}
+
+	for _, v := range incChain {
+		if s == v {
+			panic("jce circular reference: " + s)
+		}
+	}
+
+	incChain = append(incChain, s)
+	p.IncChain = incChain
+	p.lex = NewLexState(s, b)
+	p.fileNames = map[string]bool{}
+
+	return p
+}
+
+func (p *Parse) parse() {
+OUT:
+	for {
+		p.next()
+		t := p.t
+		switch t.T {
+		case tkEos:
+			break OUT
+		case tkInclude:
+			p.parseInclude()
+		case tkModule:
+			p.parseModule()
+		default:
+			p.parseErr("Expect include or module.")
+		}
+	}
+	p.analyzeDepend()
+}
+
 // VarType contains variable type(token)
 type VarType struct {
 	Type     TK       // basic type
@@ -40,8 +106,7 @@ func (a StructMemberSorter) Less(i, j int) bool { return a[i].Tag < a[j].Tag }
 // StructInfo record struct information.
 type StructInfo struct {
 	Name                string
-	OriginName          string //original name
-	Mb                  []StructMember
+	Member              []StructMember
 	DependModule        map[string]bool
 	DependModuleWithJce map[string]string
 }
@@ -49,11 +114,11 @@ type StructInfo struct {
 // 1. struct rename
 // struct Name { 1 require Mb type}
 func (st *StructInfo) rename() {
-	st.OriginName = st.Name
 	st.Name = upperFirstLetter(st.Name)
-	for i := range st.Mb {
-		st.Mb[i].OriginKey = st.Mb[i].Key
-		st.Mb[i].Key = upperFirstLetter(st.Mb[i].Key)
+
+	for i := range st.Member {
+		st.Member[i].OriginKey = st.Member[i].Key
+		st.Member[i].Key = upperFirstLetter(st.Member[i].Key)
 	}
 }
 
@@ -61,36 +126,33 @@ func (st *StructInfo) rename() {
 type EnumMember struct {
 	Key   string
 	Type  int
-	Value int32  //type 0
+	Value int32  //type 0  // TODO: 这个 type 是啥？name 又是啥？
 	Name  string //type 1
 }
 
 // EnumInfo record EnumMember information include name.
 type EnumInfo struct {
-	Module     string
-	Name       string
-	OriginName string // original name
-	Mb         []EnumMember
+	Module string
+	Name   string
+	Member []EnumMember
 }
 
+// enum 变量重命名，即把首字母都大写
 func (en *EnumInfo) rename() {
-	en.OriginName = en.Name
 	en.Name = upperFirstLetter(en.Name)
-	for i := range en.Mb {
-		en.Mb[i].Key = upperFirstLetter(en.Mb[i].Key)
+	for i := range en.Member {
+		en.Member[i].Key = upperFirstLetter(en.Member[i].Key)
 	}
 }
 
 // ConstInfo record const information.
 type ConstInfo struct {
-	Type       *VarType
-	Name       string
-	OriginName string // original name
-	Value      string
+	Type  *VarType
+	Name  string
+	Value string
 }
 
 func (cst *ConstInfo) rename() {
-	cst.OriginName = cst.Name
 	cst.Name = upperFirstLetter(cst.Name)
 }
 
@@ -98,35 +160,6 @@ func (cst *ConstInfo) rename() {
 type HashKeyInfo struct {
 	Name   string
 	Member []string
-}
-
-// Parse record information of parse file.
-type Parse struct {
-	Source string // 源文件
-
-	Module  string   // 包名
-	Include []string // 依赖的其他 jce 文件
-
-	Struct  []StructInfo  // struct list
-	Enum    []EnumInfo    // enum list
-	Const   []ConstInfo   // const list
-	HashKey []HashKeyInfo //
-
-	// have parsed include file
-	IncParse []*Parse
-
-	lex   *LexState
-	t     *Token
-	lastT *Token
-
-	// jce include chain
-	IncChain []string
-
-	// proto file name(not include .jce)
-	ProtoName string
-
-	DependModuleWithJce map[string]bool
-	fileNames           map[string]bool
 }
 
 func (p *Parse) parseErr(err string) {
@@ -195,7 +228,7 @@ func (p *Parse) parseEnum() {
 	enum := EnumInfo{}
 	p.expect(tkName)
 	enum.Name = p.t.S.S
-	for _, v := range p.Enum {
+	for _, v := range p.Enums {
 		if v.Name == enum.Name {
 			p.parseErr(enum.Name + " Redefine.")
 		}
@@ -214,20 +247,20 @@ LFOR:
 			switch p.t.T {
 			case tkComma:
 				m := EnumMember{Key: k, Type: 2}
-				enum.Mb = append(enum.Mb, m)
+				enum.Member = append(enum.Member, m)
 			case tkBraceRight:
 				m := EnumMember{Key: k, Type: 2}
-				enum.Mb = append(enum.Mb, m)
+				enum.Member = append(enum.Member, m)
 				break LFOR
 			case tkEq:
 				p.next()
 				switch p.t.T {
 				case tkInteger:
 					m := EnumMember{Key: k, Value: int32(p.t.S.I)}
-					enum.Mb = append(enum.Mb, m)
+					enum.Member = append(enum.Member, m)
 				case tkName:
 					m := EnumMember{Key: k, Type: 1, Name: p.t.S.S}
-					enum.Mb = append(enum.Mb, m)
+					enum.Member = append(enum.Member, m)
 				default:
 					p.parseErr("not expect " + TokenMap[p.t.T])
 				}
@@ -242,7 +275,7 @@ LFOR:
 		}
 	}
 	p.expect(tkSemi)
-	p.Enum = append(p.Enum, enum)
+	p.Enums = append(p.Enums, enum)
 }
 
 func (p *Parse) parseStructMemberDefault(m *StructMember) {
@@ -344,7 +377,7 @@ func (p *Parse) parseStructMember() *StructMember {
 func (p *Parse) checkTag(st *StructInfo) {
 	set := make(map[int32]bool)
 
-	for _, v := range st.Mb {
+	for _, v := range st.Member {
 		if set[v.Tag] {
 			p.parseErr("tag = " + strconv.Itoa(int(v.Tag)) + ". have duplicates")
 		}
@@ -353,14 +386,14 @@ func (p *Parse) checkTag(st *StructInfo) {
 }
 
 func (p *Parse) sortTag(st *StructInfo) {
-	sort.Sort(StructMemberSorter(st.Mb))
+	sort.Sort(StructMemberSorter(st.Member))
 }
 
 func (p *Parse) parseStruct() {
 	st := StructInfo{}
 	p.expect(tkName)
 	st.Name = p.t.S.S
-	for _, v := range p.Struct {
+	for _, v := range p.Structs {
 		if v.Name == st.Name {
 			p.parseErr(st.Name + " Redefine.")
 		}
@@ -372,14 +405,14 @@ func (p *Parse) parseStruct() {
 		if m == nil {
 			break
 		}
-		st.Mb = append(st.Mb, *m)
+		st.Member = append(st.Member, *m)
 	}
 	p.expect(tkSemi) //semicolon at the end of the struct.
 
 	p.checkTag(&st)
 	p.sortTag(&st)
 
-	p.Struct = append(p.Struct, st)
+	p.Structs = append(p.Structs, st)
 }
 
 func (p *Parse) parseConst() {
@@ -431,7 +464,7 @@ func (p *Parse) parseConst() {
 	}
 	p.expect(tkSemi)
 
-	p.Const = append(p.Const, m)
+	p.Consts = append(p.Consts, m)
 }
 
 func (p *Parse) parseHashKey() {
@@ -448,7 +481,6 @@ func (p *Parse) parseHashKey() {
 		switch t.T {
 		case tkSquarerRight:
 			p.expect(tkSemi)
-			p.HashKey = append(p.HashKey, hashKey)
 			return
 		case tkComma:
 		default:
@@ -490,7 +522,7 @@ func (p *Parse) parseModule() {
 		newp := newParse(name, nil, nil)
 		newp.IncChain = p.IncChain
 		newp.lex = p.lex
-		newp.Include = p.Include
+		newp.Includes = p.Includes
 		newp.IncParse = p.IncParse
 		cowp := *p
 		newp.IncParse = append(newp.IncParse, &cowp)
@@ -501,10 +533,9 @@ func (p *Parse) parseModule() {
 			// merge
 			for _, incParse := range p.IncParse {
 				if incParse.ProtoName == newp.ProtoName {
-					incParse.Struct = append(incParse.Struct, newp.Struct...)
-					incParse.Enum = append(incParse.Enum, newp.Enum...)
-					incParse.Const = append(incParse.Const, newp.Const...)
-					incParse.HashKey = append(incParse.HashKey, newp.HashKey...)
+					incParse.Structs = append(incParse.Structs, newp.Structs...)
+					incParse.Enums = append(incParse.Enums, newp.Enums...)
+					incParse.Consts = append(incParse.Consts, newp.Consts...)
 					break
 				}
 			}
@@ -522,18 +553,18 @@ func (p *Parse) parseModule() {
 
 func (p *Parse) parseInclude() {
 	p.expect(tkString)
-	p.Include = append(p.Include, p.t.S.S)
+	p.Includes = append(p.Includes, p.t.S.S)
 }
 
 // Looking for the true type of user-defined identifier
 func (p *Parse) findTNameType(tname string) (TK, string, string) {
-	for _, v := range p.Struct {
+	for _, v := range p.Structs {
 		if p.Module+"::"+v.Name == tname {
 			return tkStruct, p.Module, p.ProtoName
 		}
 	}
 
-	for _, v := range p.Enum {
+	for _, v := range p.Enums {
 		if p.Module+"::"+v.Name == tname {
 			return tkEnum, p.Module, p.ProtoName
 		}
@@ -558,14 +589,14 @@ func (p *Parse) findEnumName(ename string) (*EnumMember, *EnumInfo) {
 	}
 	var cmb *EnumMember
 	var cenum *EnumInfo
-	for ek, enum := range p.Enum {
-		for mk, mb := range enum.Mb {
+	for ek, enum := range p.Enums {
+		for mk, mb := range enum.Member {
 			if mb.Key != ename {
 				continue
 			}
 			if cmb == nil {
-				cmb = &enum.Mb[mk]
-				cenum = &p.Enum[ek]
+				cmb = &enum.Member[mk]
+				cenum = &p.Enums[ek]
 			} else {
 				p.parseErr(ename + " name conflict [" + cenum.Name + "::" + cmb.Key + " or " + enum.Name + "::" + mb.Key)
 				return nil, nil
@@ -590,13 +621,6 @@ func addToSet(m *map[string]bool, module string) {
 		*m = make(map[string]bool)
 	}
 	(*m)[module] = true
-}
-
-func addToMap(m *map[string]string, module string, value string) {
-	if *m == nil {
-		*m = make(map[string]string)
-	}
-	(*m)[module] = value
 }
 
 func (p *Parse) checkDepTName(ty *VarType, dm *map[string]bool, dmj *map[string]string) {
@@ -629,17 +653,17 @@ func (p *Parse) checkDepTName(ty *VarType, dm *map[string]bool, dmj *map[string]
 
 // analysis custom type，whether have definition
 func (p *Parse) analyzeTName() {
-	for i, v := range p.Struct {
-		for _, v := range v.Mb {
+	for i, v := range p.Structs {
+		for _, v := range v.Member {
 			ty := v.Type
-			p.checkDepTName(ty, &p.Struct[i].DependModule, &p.Struct[i].DependModuleWithJce)
+			p.checkDepTName(ty, &p.Structs[i].DependModule, &p.Structs[i].DependModuleWithJce)
 		}
 	}
 }
 
 func (p *Parse) analyzeDefault() {
-	for _, v := range p.Struct {
-		for i, r := range v.Mb {
+	for _, v := range p.Structs {
+		for i, r := range v.Member {
 			if r.Default != "" && r.DefType == tkName {
 				mb, enum := p.findEnumName(r.Default)
 
@@ -655,7 +679,7 @@ func (p *Parse) analyzeDefault() {
 				if len(enum.Module) > 0 && currModule != enum.Module {
 					defValue = enum.Module + "." + defValue
 				}
-				v.Mb[i].Default = defValue
+				v.Member[i].Default = defValue
 			}
 		}
 	}
@@ -667,7 +691,7 @@ func (p *Parse) analyzeHashKey() {
 }
 
 func (p *Parse) analyzeDepend() {
-	for _, v := range p.Include {
+	for _, v := range p.Includes {
 		relativePath := path.Dir(p.Source)
 		dependFile := relativePath + "/" + v
 		pInc := ParseFile(dependFile, p.IncChain)
@@ -692,45 +716,6 @@ func path2ProtoName(path string) string {
 	}
 
 	return path[iBegin:iEnd]
-}
-
-func (p *Parse) parse() {
-OUT:
-	for {
-		p.next()
-		t := p.t
-		switch t.T {
-		case tkEos:
-			break OUT
-		case tkInclude:
-			p.parseInclude()
-		case tkModule:
-			p.parseModule()
-		default:
-			p.parseErr("Expect include or module.")
-		}
-	}
-	p.analyzeDepend()
-}
-
-func newParse(s string, b []byte, incChain []string) *Parse {
-	p := &Parse{
-		Source:    s,
-		ProtoName: path2ProtoName(s),
-	}
-
-	for _, v := range incChain {
-		if s == v {
-			panic("jce circular reference: " + s)
-		}
-	}
-
-	incChain = append(incChain, s)
-	p.IncChain = incChain
-	p.lex = NewLexState(s, b)
-	p.fileNames = map[string]bool{}
-
-	return p
 }
 
 // ParseFile parse a file,return grammar tree.

@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"path"
 )
 
 var (
@@ -24,6 +25,9 @@ func main() {
 	flag.Parse()
 
 	for _, filename := range flag.Args() {
+		if path.Ext(filename) != ".jce" {
+			continue
+		}
 		// fmt.Println("--------------------")
 		// fmt.Println(filename)
 		// fmt.Println("--------------------")

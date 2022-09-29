@@ -468,6 +468,10 @@ func TestSliceInt8(t *testing.T) {
 	}
 }
 
+func TestLength(t *testing.T) {
+
+}
+
 // BenchmarkUint32 benchmarks the write and read the uint32 type.
 func BenchmarkUint32(t *testing.B) {
 	data := bytes.NewBuffer(make([]byte, 0))
