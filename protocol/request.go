@@ -42,7 +42,7 @@ func (r *Request) SetMagic(m int) {
 	r.Magic = m
 }
 
-func (r *Request) SetEncode(c codec.Type) {
+func (r *Request) SetEncode(c codec.CodecType) {
 	r.encode = codec.Coder(c)
 }
 
