@@ -1,16 +1,11 @@
 package codec
 
 import (
+	"encoding/binary"
 	"io"
-
-	"github.com/erpc-go/erpc/codec/binary"
-	"github.com/erpc-go/erpc/codec/gob"
-	"github.com/erpc-go/erpc/codec/json"
-	"github.com/erpc-go/erpc/codec/pb"
 )
 
 // codec 接口
-// TODO: 这里考虑重新设计接口, 内部加缓存？
 type Codec interface {
 	Marshal(v any) ([]byte, error)
 	MarshalTo(v any, w io.Writer) error
@@ -19,14 +14,21 @@ type Codec interface {
 	String() string
 }
 
+var (
+	defaultOrder = binary.LittleEndian
+)
+
 type Type string
 
 const (
-	CodeTypeGob    Type = "code/gob"
-	CodeTypeJce    Type = "code/jce"
-	CodeTypeJson   Type = "code/json"
-	CodeTypePb     Type = "code/pb"
-	CodeTypeBinary Type = "code/binary"
+	CodeTypeNone    Type = "code/none"
+	CodeTypeBinary  Type = "code/binary"
+	CodeTypeGob     Type = "code/gob"
+	CodeTypeJce     Type = "code/jce"
+	CodeTypeJson    Type = "code/json"
+	CodeTypePb      Type = "code/pb"
+	CodeTypeThrift  Type = "code/thrift"
+	CodeTypeMsgpack Type = "code/msgpack"
 )
 
 func (t Type) String() string {
@@ -38,11 +40,14 @@ var (
 )
 
 func init() {
-	coderMap[CodeTypeBinary] = binary.DefaultCoder
-	coderMap[CodeTypeGob] = gob.DefaultCoder
-	// coderMap[CodeTypeJce] = jce.DefaultCoder
-	coderMap[CodeTypeJson] = json.DefaultCoder
-	coderMap[CodeTypePb] = pb.DefaultCoder
+	coderMap[CodeTypeNone] = NewRawCoder()
+	coderMap[CodeTypeBinary] = NewBinaryCoder()
+	coderMap[CodeTypeGob] = NewGobCoder()
+	coderMap[CodeTypeJce] = NewJceCoder()
+	coderMap[CodeTypeJson] = NewJsonCoder()
+	coderMap[CodeTypePb] = NewPbCoder()
+	coderMap[CodeTypeThrift] = NewThriftCoder()
+	coderMap[CodeTypeMsgpack] = NewMsgpackCoder()
 }
 
 // 根据类型获取编码器

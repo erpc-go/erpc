@@ -1,9 +1,11 @@
-package json
+package codec
 
 import (
-	"encoding/json"
+	"github.com/json-iterator/go"
 	"io"
 )
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 // json 协议
 type JsonCoder struct {
@@ -33,25 +35,4 @@ func (js *JsonCoder) UnmarshalFrom(r io.Reader, v any) error {
 
 func (js *JsonCoder) String() string {
 	return "jce"
-}
-
-var (
-	DefaultCoder = NewJsonCoder()
-)
-
-func Marshal(v any) ([]byte, error) {
-	return DefaultCoder.Marshal(v)
-}
-
-func MarshalTo(v any, w io.Writer) error {
-	return DefaultCoder.MarshalTo(v, w)
-}
-
-func Unmarshal(data []byte, v any) error {
-	return DefaultCoder.Unmarshal(data, v)
-}
-
-func UnmarshalFrom(r io.Reader, v any) error {
-	return DefaultCoder.UnmarshalFrom(r, v)
-
 }

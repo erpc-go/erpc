@@ -102,8 +102,9 @@ func main() {
 5. MessagePack
 6. Thrift
 7. XML
-8. None(不编码，要求数据本身就为 []byte)
-9. 自定义
+8. SOAP
+9. None(不编码，要求数据本身就为 []byte)
+10. 自定义
 
 ## 网络协议
 1. tcp(默认)
@@ -123,7 +124,8 @@ func main() {
 5. etcd
 6. consul
 7. mDNS
-8. 本进程(调试)
+8. nacos
+9. 本进程(调试)
 
 
 
@@ -147,8 +149,11 @@ func main() {
 
 ## 压缩算法
 
-1. zip
-2. gzip
+1. gzip
+2. hufuman
+3. zlib
+4. none
+5.
 
 ## 限流算法
 1. 漏桶
@@ -187,6 +192,20 @@ func main() {
 
 
 ## 链路日志
+
+
+## 协议设计
+1. request 和 response 还是 message？（格式一个还是两个）
+2. header 中的 map 怎么设计（是原生编码，还是 jce？）
+3. response code 怎么设计？
+4. request 和  response header 中都设计 servername、funcname?
+5. servername 和 funcname 要分开吗？（两部分还是三部分）
+
+有哪些需要设计的？
+有哪些不应该设计？
+有哪些字段？
+扩展性呢？
+版本迭代怎么做？
 
 
 

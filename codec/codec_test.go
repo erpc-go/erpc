@@ -19,6 +19,21 @@ func NewPerson(name string, age int) *Person {
 	}
 }
 
+func TestCodec(t *testing.T) {
+	codecs := []Codec{
+		NewBinaryCoder(), NewGobCoder(), NewJceCoder(), NewJsonCoder(), NewMsgpackCoder(), NewPbCoder(), NewThriftCoder(), NewRawCoder(),
+	}
+
+	f := func(c Codec) {
+
+	}
+
+	for _, c := range codecs {
+		f(c)
+	}
+
+}
+
 func TestBinaMarshal(t *testing.T) {
 	c := Coder(CodeTypeBinary)
 	p := NewPerson("lily", 18)
