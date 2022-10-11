@@ -14,47 +14,45 @@ type Codec interface {
 	String() string
 }
 
+type CodecType string
+
+const (
+	CodeTypeNone    CodecType = "code/none"
+	CodeTypeBinary  CodecType = "code/binary"
+	CodeTypeGob     CodecType = "code/gob"
+	CodeTypeJce     CodecType = "code/jce"
+	CodeTypeJson    CodecType = "code/json"
+	CodeTypePb      CodecType = "code/pb"
+	CodeTypeThrift  CodecType = "code/thrift"
+	CodeTypeMsgpack CodecType = "code/msgpack"
+)
+
+func (t CodecType) String() string {
+	return string(t)
+}
+
+// 默认序列化的字节序
+// 默认为大端
 var (
 	defaultOrder = binary.LittleEndian
 )
 
-type Type string
-
-const (
-	CodeTypeNone    Type = "code/none"
-	CodeTypeBinary  Type = "code/binary"
-	CodeTypeGob     Type = "code/gob"
-	CodeTypeJce     Type = "code/jce"
-	CodeTypeJson    Type = "code/json"
-	CodeTypePb      Type = "code/pb"
-	CodeTypeThrift  Type = "code/thrift"
-	CodeTypeMsgpack Type = "code/msgpack"
-)
-
-func (t Type) String() string {
-	return string(t)
+var Codecs = map[CodecType]Codec{
+	CodeTypeNone:    NewRawCoder(),
+	CodeTypeBinary:  NewBinaryCoder(),
+	CodeTypeGob:     NewGobCoder(),
+	CodeTypeJce:     NewJceCoder(),
+	CodeTypeJson:    NewJsonCoder(),
+	CodeTypePb:      NewPbCoder(),
+	CodeTypeThrift:  NewThriftCoder(),
+	CodeTypeMsgpack: NewMsgpackCoder(),
 }
 
-var (
-	coderMap map[Type]Codec = make(map[Type]Codec)
-)
-
-func init() {
-	coderMap[CodeTypeNone] = NewRawCoder()
-	coderMap[CodeTypeBinary] = NewBinaryCoder()
-	coderMap[CodeTypeGob] = NewGobCoder()
-	coderMap[CodeTypeJce] = NewJceCoder()
-	coderMap[CodeTypeJson] = NewJsonCoder()
-	coderMap[CodeTypePb] = NewPbCoder()
-	coderMap[CodeTypeThrift] = NewThriftCoder()
-	coderMap[CodeTypeMsgpack] = NewMsgpackCoder()
+// 自定义注册编码方案
+func RegisterCodec(t CodecType, c Codec) {
+	Codecs[t] = c
 }
 
-// 根据类型获取编码器
-func Coder(codeType Type) Codec {
-	c, ok := coderMap[codeType]
-	if !ok {
-		return nil
-	}
-	return c
+func UnRegisterCodec(t CodecType, c Codec) {
+	delete(Codecs, t)
 }

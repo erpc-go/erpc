@@ -3,8 +3,6 @@ package codec
 import (
 	"fmt"
 	"testing"
-
-	"github.com/edte/testpb2go/demo"
 )
 
 type Person struct {
@@ -19,46 +17,34 @@ func NewPerson(name string, age int) *Person {
 	}
 }
 
+func equal(p1, p2 *Person) bool {
+	return p1.Age == p2.Age && p2.Name == p1.Name
+}
+
 func TestCodec(t *testing.T) {
 	codecs := []Codec{
 		NewBinaryCoder(), NewGobCoder(), NewJceCoder(), NewJsonCoder(), NewMsgpackCoder(), NewPbCoder(), NewThriftCoder(), NewRawCoder(),
 	}
 
 	f := func(c Codec) {
+		want := NewPerson("lily", 18)
+		b, err := c.Marshal(want)
+		if err != nil {
+			panic(err)
+		}
+		got := &Person{}
 
+		if err = c.Unmarshal(b, got); err != nil {
+			panic(err)
+		}
+
+		if !equal(want, got) {
+			panic(fmt.Errorf("got %v, but want %v", want, got))
+		}
 	}
 
 	for _, c := range codecs {
 		f(c)
 	}
 
-}
-
-func TestBinaMarshal(t *testing.T) {
-	c := Coder(CodeTypeBinary)
-	p := NewPerson("lily", 18)
-	b, err := c.Marshal(p)
-	fmt.Println(b, err)
-}
-
-func TestGob(t *testing.T) {
-	c := Coder(CodeTypeGob)
-	p := NewPerson("lily", 18)
-	b, err := c.Marshal(p)
-	fmt.Println(b, err)
-	pp := &Person{}
-	c.Unmarshal(b, pp)
-	fmt.Println(pp)
-}
-
-func TestPB(t *testing.T) {
-	c := Coder(CodeTypePb)
-	p := demo.HelloRequest{
-		Msg: "ping",
-	}
-	b, err := c.Marshal(&p)
-	pp := demo.HelloRequest{}
-	fmt.Println(b, err)
-	c.Unmarshal(b, &pp)
-	fmt.Println(pp)
 }
