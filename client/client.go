@@ -31,7 +31,7 @@ type Client struct {
 
 func NewClient() *Client {
 	c := &Client{
-		pooler:     nil,
+		pooler:     transport.NewConnectionPool(),
 		enablePool: false,
 		protocol:   "",
 	}
@@ -58,7 +58,7 @@ func WithConnFactory(f transport.ConnFactory) Option {
 
 // 对外的接口 1： 参数自动打包，直接传特定参数
 func (c *Client) Call(ctx context.Context, route string, req interface{}, rsp interface{}) (err error) {
-	log.Debugf("client begin init context when request addr:%s", route)
+	log.Debug("client begin init context when request addr:%s", route)
 
 	// [step 1] 创建连接上下文
 	ct := transport.NewContext()
@@ -88,9 +88,9 @@ func (c *Client) listen(ctx context.Context, ct *transport.Context) (err error) 
 
 	// [step 1] 开始发送
 	go func() {
-		log.Debugf("client begin send,raw:%v", ct)
+		log.Debug("client begin send,raw:%v", ct)
 		if err := c.send(ct, res); err != nil {
-			log.Errorf("client send failed, raw ctx:%v", ct)
+			log.Error("client send failed, raw ctx:%v", ct)
 			return
 		}
 	}()
@@ -113,40 +113,40 @@ func (c *Client) send(ctx *transport.Context, res *CallRes) (err error) {
 
 	route := ctx.RequestConn.Route
 
-	log.Debugf("begin get addr %s when send", route)
+	log.Debug("begin get addr %s when send", route)
 
 	// [step 1] 获取 ip:port
 	addr, err := c.getAddr(route)
 	if err != nil {
-		log.Errorf("server %s get addr failed, err:%s", route, err)
+		log.Error("server %s get addr failed, err:%s", route, err)
 		return
 	}
 
-	log.Debugf("begin get conn from pool, server:%s, addr:%s", route, addr)
+	log.Debug("begin get conn from pool, server:%s, addr:%s", route, addr)
 
 	// [step 2] 然后从连接池中取一个连接
 	conn, err := c.pooler.Get(context.Background())
 	if err != nil {
-		log.Errorf("get conn addr %s failed, err:%s", addr, err)
+		log.Error("get conn addr %s failed, err:%s", addr, err)
 		return
 	}
 
 	// [setp 3] 设置 context 连接
 	ctx.SetConn(conn)
 
-	log.Debugf("begin init connection context when request server: %s", route)
+	log.Debug("begin init connection context when request server: %s", route)
 
 	// [setp 4] 发送请求
 	if err = ctx.SendRequest(); err != nil {
 		return
 	}
 
-	log.Debugf("begin read response, server:%s", route)
+	log.Debug("begin read response, server:%s", route)
 
 	// [step 5] 读取响应
 	err = ctx.ReadResponse()
 
-	log.Debugf("call server %s succ", route)
+	log.Debug("call server %s succ", route)
 
 	return
 }
@@ -155,16 +155,16 @@ func (c *Client) send(ctx *transport.Context, res *CallRes) (err error) {
 // 1. ip://
 // 2. servername.funcname
 func (c *Client) getAddr(server string) (addr string, err error) {
-	log.Debugf("client begin get server %s 's addr", server)
+	log.Debug("client begin get server %s 's addr", server)
 
 	// [step 1] 如果是 ip，就直接走
 	ip, isIp := c.getIp(server)
 	if isIp {
-		log.Debugf("%s is ip", server)
+		log.Debug("%s is ip", server)
 		return ip, nil
 	}
 
-	log.Debugf("%s is servername.funcname type", server)
+	log.Debug("%s is servername.funcname type", server)
 
 	t := server
 
@@ -175,7 +175,7 @@ func (c *Client) getAddr(server string) (addr string, err error) {
 	} else if len(s) == 2 {
 		t = s[0]
 	} else {
-		log.Errorf("invalid server format, neet [servername.funcname] type, route:%s", server)
+		log.Error("invalid server format, neet [servername.funcname] type, route:%s", server)
 		err = errors.New("invalid server format, neet [servername.funcname] type")
 		return
 	}
@@ -194,7 +194,7 @@ func (c *Client) isIp(server string) bool {
 func (c *Client) getIp(server string) (ip string, isIp bool) {
 	// [step 1] 先校验长度
 	if len(server) <= 5 {
-		log.Debugf("server %s 'length <= 5", server)
+		log.Debug("server %s 'length <= 5", server)
 		return "", false
 	}
 
@@ -202,24 +202,24 @@ func (c *Client) getIp(server string) (ip string, isIp bool) {
 	schema := server[:5]
 	last := server[5:]
 
-	log.Debugf("schema: %s, last: %s", schema, last)
+	log.Debug("schema: %s, last: %s", schema, last)
 
 	// [step 3] 校验协议
 	if schema != "ip://" {
-		log.Debugf("shema %s not equal ip://", schema)
+		log.Debug("shema %s not equal ip://", schema)
 		return "", false
 	}
 
 	// [step 3] 再分离 ip 和 port
 	s := strings.Split(last, ":")
 	if len(s) != 2 {
-		log.Debugf("split %s error by :", last)
+		log.Debug("split %s error by :", last)
 		return "", false
 	}
 
 	i, err := strconv.Atoi(s[1])
 	if err != nil {
-		log.Debugf("port %s not number", s[1])
+		log.Debug("port %s not number", s[1])
 		return "", false
 	}
 
@@ -235,7 +235,7 @@ func (c *Client) getIp(server string) (ip string, isIp bool) {
 // 给定请求服务名，然后负债均衡返回其中一个部署的机器 ip 地址
 // TODO: 每次响应一个 ip，那其他集群内怎么同步的？
 func (c *Client) discovery(route string) (addr string, err error) {
-	log.Debugf("begin discovery %s", route)
+	log.Debug("begin discovery %s", route)
 
 	if route == "center" {
 		return contant.DefaultCenterAddress, nil
@@ -247,16 +247,16 @@ func (c *Client) discovery(route string) (addr string, err error) {
 	rsp := &center.DiscoveryResponse{}
 
 	if err = c.Call(context.Background(), contant.RouteDiscovery, req, rsp); err != nil {
-		log.Errorf("client discovery %s call failed, err:%s", route, err)
+		log.Error("client discovery %s call failed, err:%s", route, err)
 		return
 	}
 
 	if rsp.Err != "" {
-		log.Errorf("client discovery %s server failed, err:%s", route, rsp.Err)
+		log.Error("client discovery %s server failed, err:%s", route, rsp.Err)
 		return "", errors.New(rsp.Err)
 	}
 
-	log.Debugf("discovery route %s succ,res:%s", route, rsp.Addr)
+	log.Debug("discovery route %s succ,res:%s", route, rsp.Addr)
 
 	addr = rsp.Addr
 

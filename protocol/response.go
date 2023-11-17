@@ -50,20 +50,20 @@ func (r *Response) SetEncode(c codec.Codec) {
 }
 
 func (r *Response) EncodeTo(w io.Writer) (err error) {
-	log.Debugf("begin encode response to write")
+	log.Debug("begin encode response to write")
 
 	// [step 1]  如果 body 为空，则直接序列化报文
 	if r.body == nil {
-		log.Errorf("marshal response body to write failed, error:%s", err)
+		log.Error("marshal response body to write failed, error:%s", err)
 		return DefaultCodec.MarshalTo(r, w)
 	}
 
-	log.Debugf("begin encode response body to write succ")
+	log.Debug("begin encode response body to write succ")
 
 	// [step 2] 先序列化 body
 	r.Body, err = r.encode.Marshal(r.body)
 	if err != nil {
-		log.Errorf("marshal response body to write failed, error:%s", err)
+		log.Error("marshal response body to write failed, error:%s", err)
 		return
 	}
 
@@ -72,21 +72,21 @@ func (r *Response) EncodeTo(w io.Writer) (err error) {
 }
 
 func (r *Response) DecodeFrom(f io.Reader) (err error) {
-	log.Debugf("begin decode response from reader")
+	log.Debug("begin decode response from reader")
 
 	// [step 1] 先反序列化报文
 	if err = DefaultCodec.UnmarshalFrom(f, r); err != nil {
-		log.Errorf("unmarshal response form reader failed, error:%s", err)
+		log.Error("unmarshal response form reader failed, error:%s", err)
 		return
 	}
 
 	// [step 2] 然后反序列化 body
 	if err = r.encode.Unmarshal(r.Body, r.body); err != nil {
-		log.Errorf("unmarshal response body form reader failed, error:%s", err)
+		log.Error("unmarshal response body form reader failed, error:%s", err)
 		return
 	}
 
-	log.Debugf("decode response from reader succ")
+	log.Debug("decode response from reader succ")
 
 	return
 }

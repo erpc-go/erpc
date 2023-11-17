@@ -52,7 +52,7 @@ func (a addrs) balance() (addr string, err error) {
 func (a addrs) update(server string) {
 	now := time.Now()
 
-	log.Debugf("center begin update addr, raw:%v", a)
+	log.Debug("center begin update addr, raw:%v", a)
 
 	// [setp 1] 扫描 addr
 	for _, v := range a {
@@ -65,14 +65,14 @@ func (a addrs) update(server string) {
 		lasttime := time.UnixMilli(v.lasttime)
 		d := now.Sub(lasttime)
 
-		log.Debugf("center addr %s lasttime:%s, now:%s, distance %s, ", v.addr, lasttime, now, d)
+		log.Debug("center addr %s lasttime:%s, now:%s, distance %s, ", v.addr, lasttime, now, d)
 
 		// [step 4] 如果小于 5s，则跳过
 		if d <= time.Second*5 {
 			continue
 		}
 
-		log.Debugf("center server %s's addr %s begin invalid", server, v.addr)
+		log.Debug("center server %s's addr %s begin invalid", server, v.addr)
 
 		// [step 5] 大于 5s，则更新为无效 addr，同时从有效 list 中删除
 		v.valid = false

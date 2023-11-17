@@ -7,6 +7,6 @@ import (
 )
 
 func TestSetLogLevel(t *testing.T) {
-	log.Debugf("debug")
-	log.Errorf("error")
+	log.Debug("debug")
+	log.Error("error")
 }

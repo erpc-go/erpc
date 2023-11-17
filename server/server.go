@@ -47,14 +47,14 @@ func (s *Server) Handle(host string, handler HandlerFunc, req interface{}, rsp i
 	// [step 1] 分割 host
 	st := strings.Split(host, ".")
 	if len(st) != 2 {
-		log.Panicf("invalid name %s", host)
+		log.Panic("invalid name %s", host)
 	}
 
 	// [step 2] 设置 servername
 	if s.name == "" {
 		s.name = st[0]
 	} else if s.name != st[0] {
-		log.Panicf("multiple service names,%s which should be equal to %s", st[0], s.name)
+		log.Panic("multiple service names,%s which should be equal to %s", st[0], s.name)
 	}
 
 	// [step 3] 设置 func
@@ -66,15 +66,15 @@ func (s *Server) Handle(host string, handler HandlerFunc, req interface{}, rsp i
 
 // 监听服务
 func (s *Server) Listen(addr string) {
-	log.Debugf("handles:%v", s.handles)
+	log.Debug("handles:%v", s.handles)
 
 	// [step 1] 开 net
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
-		log.Panicf("addr %s listen failed, err:%s", addr, err.Error())
+		log.Panic("addr %s listen failed, err:%s", addr, err.Error())
 	}
 
-	log.Infof("addr:%s listen succ", addr)
+	log.Info("addr:%s listen succ", addr)
 
 	// [step 2] 设置本地 addr
 	s.localhost = addr
@@ -90,10 +90,10 @@ func (s *Server) Listen(addr string) {
 	for {
 		c, err := l.Accept()
 		if err != nil {
-			log.Errorf("server accept faild, addr:%s,err:%s", s.localhost, err)
+			log.Error("server accept faild, addr:%s,err:%s", s.localhost, err)
 		}
 
-		log.Debugf("server %s accept a new client:%s", addr, c.RemoteAddr())
+		log.Debug("server %s accept a new client:%s", addr, c.RemoteAddr())
 
 		// TODO: 这里考虑优化掉，当连接断开后，协程也关闭，而不是继续循环
 		go s.handle(c)
@@ -105,16 +105,16 @@ func (s *Server) Listen(addr string) {
 func (s *Server) register() {
 	done := make(chan struct{}, 1)
 
-	log.Debugf("server %s begin first registe", s.name)
+	log.Debug("server %s begin first registe", s.name)
 
 	// [setp 1] 先尝试注册一次，成功就直接返回
 	err := s.registe()
 	if err == nil {
-		log.Infof("serve %s first registe succ", s.name)
+		log.Info("serve %s first registe succ", s.name)
 		return
 	}
 
-	log.Errorf("server %s first registe failed, err:%s", s.name, err.Error())
+	log.Error("server %s first registe failed, err:%s", s.name, err.Error())
 
 	// [step 2] 失败就定时 1s 重试注册，直到成功
 	for {
@@ -124,19 +124,19 @@ func (s *Server) register() {
 		case <-done:
 			return
 		case <-t.C:
-			log.Debugf("server %s begin registe", s.name)
+			log.Debug("server %s begin registe", s.name)
 
 			err := s.registe()
 
-			log.Debugf("raw xxxhh:%v, %v", err, err == nil)
+			log.Debug("raw xxxhh:%v, %v", err, err == nil)
 
 			if err == nil {
-				log.Infof("serve %s registe succ", s.name)
+				log.Info("serve %s registe succ", s.name)
 				done <- struct{}{}
 				return
 			}
 
-			log.Errorf("server %s registe failed, err:%s", s.name, err.Error())
+			log.Error("server %s registe failed, err:%s", s.name, err.Error())
 		}
 	}
 }
@@ -153,7 +153,7 @@ func (s *Server) registe() error {
 	c := client.NewClient()
 
 	if err := c.Call(context.Background(), contant.RouteRegister, req, rsp); err != nil {
-		log.Errorf("server %s register failed,err:%s", s.name, err)
+		log.Error("server %s register failed,err:%s", s.name, err)
 		return err
 	}
 
@@ -168,20 +168,20 @@ func (s *Server) registe() error {
 func (s *Server) handle(conn net.Conn) {
 	// [step 1] 循环处理一个连接
 	for {
-		log.Debugf("%s recive a new request", s.name)
-		log.Debugf("%s begin init context", s.name)
+		log.Debug("%s recive a new request", s.name)
+		log.Debug("%s begin init context", s.name)
 
 		// [step 2] 开连接上下文
 		c := transport.NewContext()
 		c.SetConn(conn)
 
-		log.Debugf("first %s context raw:%v", s.name, c)
+		log.Debug("first %s context raw:%v", s.name, c)
 
 		// [step 3] 初始化上下文参数
 		c.SetResponseConn(protocol.NewResponse())
 		c.RequestConn.SetEncode(codec.CodeTypePb)
 
-		log.Debugf("%s begin read request", s.name)
+		log.Debug("%s begin read request", s.name)
 
 		// [step 4] 读请求
 		// FIX: 这里注意，现有逻辑是 read 失败会直接返回，理论上应该是阻塞而不是返回
@@ -190,22 +190,22 @@ func (s *Server) handle(conn net.Conn) {
 			if err == io.EOF {
 				continue
 			}
-			log.Errorf("%s read request failed, err:%s", s.name, err)
+			log.Error("%s read request failed, err:%s", s.name, err)
 			c.ResponseConn.SetStatus(protocol.StatusError)
 			c.SendResponse()
 			continue
 		}
 
-		log.Debugf("%s begin get handler, request:%v", s.name, c.RequestConn)
+		log.Debug("%s begin get handler, request:%v", s.name, c.RequestConn)
 
 		// [step 5] 获取处理 handler item
 		h, has := s.handles.get(c.RequestConn.Route)
 		if !has {
-			log.Debugf("server %s has not registe %s", s.name, c.RequestConn.Route)
+			log.Debug("server %s has not registe %s", s.name, c.RequestConn.Route)
 			continue
 		}
 
-		log.Debugf("%s s'handler :%v", c.RequestConn.Route, h)
+		log.Debug("%s s'handler :%v", c.RequestConn.Route, h)
 
 		// [step 6] 设置上下文参数 body
 		c.RequestConn.SetBody(h.req)
@@ -213,29 +213,29 @@ func (s *Server) handle(conn net.Conn) {
 		c.Request = h.req
 		c.Response = h.rsp
 
-		log.Debugf("second %s context raw:%v", s.name, c)
+		log.Debug("second %s context raw:%v", s.name, c)
 
-		log.Debugf("%s begin read request body", s.name)
+		log.Debug("%s begin read request body", s.name)
 
 		// [step 7] 解析请求体
 		if err := c.ReadRequestBody(); err != nil {
-			log.Errorf("%s read request body failed", s.name)
+			log.Error("%s read request body failed", s.name)
 			c.ResponseConn.SetStatus(protocol.StatusError)
 			c.SendResponse()
 			continue
 		}
 
-		log.Debugf("%s begin handle request", s.name)
+		log.Debug("%s begin handle request", s.name)
 
 		// [step 8] 处理请求
 		c.HandleRequest(h.handler)
 
-		log.Debugf("%s begin send response", s.name)
+		log.Debug("%s begin send response", s.name)
 
 		// [step 9] 发送响应
 		c.SendResponse()
 
-		log.Debugf("%s send response succ", s.name)
+		log.Debug("%s send response succ", s.name)
 	}
 }
 
@@ -255,7 +255,7 @@ func (s *Server) heatbeat() {
 
 		select {
 		case <-t.C:
-			log.Debugf("server %s begin heatbeat center", s.name)
+			log.Debug("server %s begin heatbeat center", s.name)
 
 			req.SendTime = time.Now().UnixMilli()
 
@@ -263,11 +263,11 @@ func (s *Server) heatbeat() {
 
 			err := c.Call(context.Background(), contant.RouteHeatbeat, req, rsp)
 			if err != nil {
-				log.Errorf("heatbeat center heat faild,err:%s", err)
+				log.Error("heatbeat center heat faild,err:%s", err)
 				continue
 			}
 
-			log.Debugf("heatbeat center succ, recive time:%s", time.UnixMilli(rsp.ResponseTime))
+			log.Debug("heatbeat center succ, recive time:%s", time.UnixMilli(rsp.ResponseTime))
 		}
 	}
 }

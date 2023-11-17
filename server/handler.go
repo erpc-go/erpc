@@ -47,8 +47,8 @@ func (h handles) get(name string) (res handleItem, has bool) {
 		server = st[1]
 	}
 
-	log.Debugf("get serve %s handler", name)
-	log.Debugf("get handler,name :%s,handles raw :%v", st[1], h)
+	log.Debug("get serve %s handler", name)
+	log.Debug("get handler,name :%s,handles raw :%v", st[1], h)
 
 	res, has = h[server]
 	return

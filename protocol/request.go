@@ -43,7 +43,7 @@ func (r *Request) SetMagic(m int) {
 }
 
 func (r *Request) SetEncode(c codec.CodecType) {
-	r.encode = codec.Coder(c)
+	r.encode = codec.Codecs[c]
 }
 
 func (r *Request) SetBody(body interface{}) {
@@ -56,16 +56,16 @@ func (r *Request) SetHost(host string) {
 
 // 编码请求
 func (r *Request) EncodeTo(w io.Writer) (err error) {
-	log.Debugf("begin encode request to write")
+	log.Debug("begin encode request to write")
 
 	// [step 1] 先序列化 body
 	r.Body, err = r.encode.Marshal(r.body)
 	if err != nil {
-		log.Errorf("marshal request body to write failed, error:%s", err)
+		log.Error("marshal request body to write failed, error:%s", err)
 		return
 	}
 
-	log.Debugf("encode request write succ")
+	log.Debug("encode request write succ")
 
 	// [step 2] 然后序列化整个报文
 	return DefaultCodec.MarshalTo(r, w)
@@ -73,22 +73,22 @@ func (r *Request) EncodeTo(w io.Writer) (err error) {
 
 // 解码 body
 func (r *Request) DecodeBody() (err error) {
-	log.Debugf("begin decode request:%v", r)
+	log.Debug("begin decode request:%v", r)
 	if r.encode == nil {
-		log.Errorf("decode request body failed, encode nil")
+		log.Error("decode request body failed, encode nil")
 		return DefaultBodyCodec.Unmarshal(r.Body, r.body)
 	}
 	if err = r.encode.Unmarshal(r.Body, r.body); err != nil {
-		log.Errorf("decode request body failed, err:%s", err)
+		log.Error("decode request body failed, err:%s", err)
 		return
 	}
-	log.Debugf("decode request body succ, body:%v", r.body)
+	log.Debug("decode request body succ, body:%v", r.body)
 	return
 }
 
 // 解码请求
 func (r *Request) DecodeFrom(f io.Reader) (err error) {
-	log.Debugf("begin decode request from reader")
+	log.Debug("begin decode request from reader")
 	return DefaultCodec.UnmarshalFrom(f, r)
 }
 
