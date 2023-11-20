@@ -6,6 +6,7 @@ require (
 	github.com/apache/thrift v0.19.0
 	github.com/edte/testpb2go v0.0.0-20220914033834-d99c71df9316
 	github.com/erpc-go/jce-codec v0.0.0-20221002045651-b942f9797250
+	github.com/erpc-go/log v0.0.1
 	github.com/go-playground/assert/v2 v2.0.1
 	github.com/gogo/protobuf v1.3.2
 	github.com/json-iterator/go v1.1.12

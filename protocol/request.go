@@ -4,7 +4,7 @@ import (
 	"io"
 
 	"github.com/erpc-go/erpc/codec"
-	"github.com/erpc-go/erpc/log"
+	"github.com/erpc-go/log"
 )
 
 // 请求报文格式：

@@ -6,9 +6,9 @@ import (
 
 	"github.com/edte/testpb2go/center"
 	"github.com/erpc-go/erpc/center/contant"
-	"github.com/erpc-go/erpc/log"
 	"github.com/erpc-go/erpc/server"
 	"github.com/erpc-go/erpc/transport"
+	"github.com/erpc-go/log"
 )
 
 type RegisterArgs struct {

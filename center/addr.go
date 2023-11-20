@@ -4,7 +4,7 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/erpc-go/erpc/log"
+	"github.com/erpc-go/log"
 )
 
 type addrs map[string]*addrItem
