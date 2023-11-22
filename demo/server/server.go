@@ -3,31 +3,21 @@ package main
 import (
 	"fmt"
 
-	"github.com/edte/testpb2go/demo"
 	"github.com/erpc-go/erpc"
-	"github.com/erpc-go/erpc/transport"
+	"github.com/erpc-go/erpc/server"
 	"github.com/erpc-go/log"
+	"github.com/erpc-go/testjce2go/base"
 )
 
-func handleHello(c *transport.Context) {
-	rsp := c.Response.(*demo.HelloResponse)
-
-	rsp.Msg = "hello world"
-	fmt.Println(rsp.Msg)
-}
-
-func handleEcho(c *transport.Context) {
-	req := c.Request.(*demo.EchoRequest)
-	rsp := c.Response.(*demo.EchoResponse)
-
-	rsp.Msg = req.Msg
-
-	fmt.Println(rsp.Msg)
+func handleHello(c *server.Context) {
+	rsp := c.Rsp.(*base.AndroidRsp)
+	fmt.Println(rsp)
 }
 
 func main() {
 	log.DefaultLogger.SetLevel(log.DebugLevel)
-	erpc.Handle("demo.hello", handleHello, &demo.HelloRequest{}, &demo.HelloResponse{})
-	erpc.Handle("demo.echo", handleEcho, &demo.EchoRequest{}, &demo.EchoResponse{})
-	erpc.Listen(":8877")
+	erpc.GlobalServeMutex.ListenNet = "tcp"
+	erpc.GlobalServeMutex.Address = ":888"
+	erpc.HandleFunc("demo.test.hh.send", "", handleHello, (*base.AndroidReq)(nil), (*base.AndroidRsp)(nil))
+	erpc.ListenAndServe()
 }
