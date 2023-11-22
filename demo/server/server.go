@@ -6,6 +6,7 @@ import (
 	"github.com/edte/testpb2go/demo"
 	"github.com/erpc-go/erpc"
 	"github.com/erpc-go/erpc/transport"
+	"github.com/erpc-go/log"
 )
 
 func handleHello(c *transport.Context) {
@@ -25,6 +26,7 @@ func handleEcho(c *transport.Context) {
 }
 
 func main() {
+	log.DefaultLogger.SetLevel(log.DebugLevel)
 	erpc.Handle("demo.hello", handleHello, &demo.HelloRequest{}, &demo.HelloResponse{})
 	erpc.Handle("demo.echo", handleEcho, &demo.EchoRequest{}, &demo.EchoResponse{})
 	erpc.Listen(":8877")
