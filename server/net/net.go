@@ -150,7 +150,7 @@ func ListenAndServeUDP(addr string, checker Checker, handler Handler, limiter li
 // 调用handler处理请求，msgTimeout为消息的超时时间
 func ListenAndServeTCP(addr string, checker Checker, handler Handler, limiter Limiter) {
 	listenAddr, e := net.ResolveTCPAddr("tcp4", addr)
-	log.Raw("tcp addr: %s\n", addr)
+	log.Raw("tcp addr: %s\n", listenAddr)
 	if e != nil {
 		panic("invalid listen addr")
 	}

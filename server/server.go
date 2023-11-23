@@ -5,12 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/erpc-go/erpc/protocol"
 	"github.com/erpc-go/erpc/server/net"
+	"github.com/erpc-go/erpc/utils"
 	"github.com/erpc-go/jce-codec"
 	"github.com/erpc-go/log"
 	limit "github.com/erpc-go/ratelimit"
@@ -85,7 +85,7 @@ func (sm *ServeMutex) Handle(pattern, token string, handler Handler, reqType, rs
 	}
 
 	// 命令字通配
-	pattern, err := ReplacePattern(pattern, "mesh")
+	pattern, err := utils.ReplacePattern(pattern, "mesh")
 	if err != nil {
 		panic("invalid pattern")
 	}
@@ -105,7 +105,7 @@ func (sm *ServeMutex) Alias(src string, dst ...string) {
 	defer sm.mutex.Unlock()
 
 	// 命令字通配
-	src, err := ReplacePattern("")
+	src, err := utils.ReplacePattern("")
 	if err != nil {
 		panic("invalid pattern")
 	}
@@ -282,29 +282,4 @@ func (sm *ServeMutex) Listen() {
 
 func isValidPattern(p string) (b bool) {
 	return true
-}
-
-func ReplacePattern(in string, replaces ...string) (string, error) {
-	if strings.Index(in, "/") != -1 {
-		return in, nil
-	}
-	s := strings.Split(in, ".")
-	if len(s) != 4 {
-		return "", fmt.Errorf("%s need 4 sections", in)
-	}
-	for i := range s {
-		if s[i] != "*" {
-			continue
-		}
-		if len(replaces) <= i || len(replaces[i]) == 0 {
-			return "", fmt.Errorf("%s's %d section invalid", in, i)
-		}
-		s[i] = replaces[i]
-	}
-	out := s[0]
-	for i := 1; i < len(s); i++ {
-		out += "." + s[i]
-	}
-
-	return out, nil
 }

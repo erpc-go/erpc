@@ -1,12 +1,11 @@
 package test
 
-import "github.com/erpc-go/erpc/protocol"
+import (
+	"github.com/erpc-go/erpc/protocol"
+	"github.com/erpc-go/jce-codec"
+)
 
 type TestProtocol struct{}
-
-func (te *TestProtocol) Magic() uint32 {
-	return 0
-}
 
 func (te *TestProtocol) MarshalHeader() ([]byte, error) {
 	panic("not implemented") // TODO: Implement
@@ -121,18 +120,22 @@ func (te *TestProtocol) GetExtends() map[string]string {
 	panic("not implemented") // TODO: Implement
 }
 
-func (te *TestProtocol) Clone() protocol.Header {
+func (te *TestProtocol) SetBodyLen(_ uint32) {
 	panic("not implemented") // TODO: Implement
 }
 
-func (te *TestProtocol) CloneEmpty() protocol.Header {
+func (te *TestProtocol) MarshalBody(_ jce.Messager) ([]byte, error) {
 	panic("not implemented") // TODO: Implement
 }
 
-func (te *TestProtocol) MarshalBody() ([]byte, error) {
+func (te *TestProtocol) UnmarshalBody(_ []byte, _ jce.Messager) error {
 	panic("not implemented") // TODO: Implement
 }
 
-func (te *TestProtocol) UnmarshalBody(_ []byte) error {
+func (te *TestProtocol) Clone() protocol.Protocol {
+	panic("not implemented") // TODO: Implement
+}
+
+func (te *TestProtocol) CloneEmpty() protocol.Protocol {
 	panic("not implemented") // TODO: Implement
 }

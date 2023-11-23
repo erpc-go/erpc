@@ -8,6 +8,7 @@ require (
 	github.com/erpc-go/jce-codec v0.0.0-20221002045651-b942f9797250
 	github.com/erpc-go/log v0.0.1
 	github.com/erpc-go/ratelimit v0.0.2
+	github.com/erpc-go/testjce2go v0.0.0-20231122133552-59363eba5b79
 	github.com/go-playground/assert/v2 v2.0.1
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang/protobuf v1.5.3

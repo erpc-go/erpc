@@ -1,4 +1,4 @@
-package protocols
+package http
 
 import (
 	"bufio"
@@ -675,6 +675,4 @@ func HTTPBodyUnmarshal(head *HTTPHeader, data []byte, req interface{}) error {
 	default:
 		return fmt.Errorf("invalid Content-Type:%s", head.request.Header["Content-Type"][0])
 	}
-
-	return nil
 }

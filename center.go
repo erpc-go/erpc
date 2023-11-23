@@ -1,13 +1,13 @@
 package erpc
 
 import (
-	"github.com/erpc-go/erpc/center"
+// "github.com/erpc-go/erpc/center"
 )
 
-var (
-	defaultCenter = center.NewCenter()
-)
+// var (
+// 	defaultCenter = center.NewCenter()
+// )
 
-func ListenCenter() {
-	defaultCenter.Listen()
-}
+// func ListenCenter() {
+// 	defaultCenter.Listen()
+// }

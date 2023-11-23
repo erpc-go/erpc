@@ -2,263 +2,316 @@ package client
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"net"
-	"strconv"
 	"strings"
+	"time"
 
-	"github.com/edte/testpb2go/center"
-	"github.com/erpc-go/erpc/center/contant"
 	"github.com/erpc-go/erpc/protocol"
-	"github.com/erpc-go/erpc/transport"
-	"github.com/erpc-go/log"
+	"github.com/erpc-go/erpc/protocol/test"
+	"github.com/erpc-go/erpc/utils"
 )
 
-type CallRes struct {
-	Done chan struct{}
-	Err  error
-}
+// sidecar默认配置
+const (
+	DefaultEnvoyHost = "127.0.0.1"
+	DefaultEnvoyPort = 65001
+)
 
-type Option func(*Client)
+// 应用层协议类型
+const (
+	AppProtocolTME = "tme" // tme协议
+	AppProtocolPDU = "pdu" // pdu协议
+	AppProtocolQZA = "qza" // qza协议
+)
 
+// context关键属性
+var (
+	RemoteServiceName = "remote_service_name" // 上游请求中的主调服务名(value为string类型)
+	LocalServiceName  = "local_service_name"  // 上游请求中的被调服务名(value为string类型)
+	SpanID            = "span_id"             // Span ID(value为uint64类型)
+	ParentSpanID      = "parent_span_id"      // Parent Span ID(value为uint64类型)
+	TraceID           = "trace_id"            // Trace ID(value为string类型)
+	Flag              = "flag"                // Flag(value为uint32类型)
+	Env               = "env"                 // env(devops id,string类型)
+)
+
+// Client 框架客户端实例
 type Client struct {
-	pooler      transport.Pooler      // 底层连接池
-	enablePool  bool                  // 使用连接池
-	protocol    string                // 使用协议，默认 TCP
-	connFactory transport.ConnFactory // 连接工厂
+	Request                    // 网络底层
+	reqBody  interface{}       // 请求包
+	rspBody  interface{}       // 响应包
+	Protocol protocol.Protocol // 应用协议首部
+	authInfo protocol.AuthInfo // AuthInfo
 }
 
-func NewClient() *Client {
+// CallDesc RPC参数
+type CallDesc struct {
+	LocalServiceName string        // <非必填>本次请求主调服务名
+	ServiceName      string        // <必填>本次请求被调服务名, 对应toml配置文件中的一段
+	Timeout          time.Duration // <非必填>RPC超时时间
+	CmdID            int32         // <非必填>pdu/qza协议主命令字
+	SubCmdID         int32         // <非必填>pdu/qza协议子命令字
+	AppProtocol      string        // <非必填>应用层协议(qza/pdu/tme), 默认tme
+}
+
+// New 构造支持tme/qdu/qza协议的client
+// 底层网络逻辑复用going/client/req
+func New(desc CallDesc, authInfo protocol.AuthInfo, reqBody, rspBody interface{}) *Client {
+	// step 1. 构造client
 	c := &Client{
-		pooler:     transport.NewConnectionPool(),
-		enablePool: false,
-		protocol:   "",
+		reqBody:  reqBody,
+		rspBody:  rspBody,
+		authInfo: authInfo,
 	}
+	// step 2. 解析mesh配置
+	serviceName, err := utils.ReplacePattern(desc.ServiceName, "mesh")
+	if err != nil {
+		return nil
+	}
+	localServiceName, _ := utils.ReplacePattern(desc.LocalServiceName, "mesh")
+
+	// step 3. 初始化协议首部
+	c.Protocol = &test.TestProtocol{}
+	c.Protocol.SetLocalServiceName(localServiceName)
+
+	// step 4. 默认与localhost,65001端口建立tcp长连接
+	address := fmt.Sprintf("ip://%s:%d", DefaultEnvoyHost, DefaultEnvoyPort)
+	request := Request{
+		Network: "tcp",
+		ReqType: SendAndRecvKeepalive,
+		Address: address,
+		Timeout: desc.Timeout,
+	}
+	if request.Timeout == 0 {
+		request.Timeout = 800 * time.Millisecond
+	}
+	// step 5. 读取动态配置
+	section := desc.ServiceName
+	if serviceName != desc.ServiceName {
+		if _, ok := conf[serviceName]; ok {
+			section = serviceName
+		}
+	}
+	if v, ok := conf[section]; ok {
+		// 通信协议
+		if len(v.Network) > 0 {
+			request.SetNetwork(v.Network)
+		}
+		// 寻址方式
+		if len(v.Address) > 3 {
+			request.SetAddress(v.Address)
+		}
+		// 当前请求延时
+		if v.Timeout > 0 {
+			request.SetTimeout(v.Timeout)
+		}
+		// 请求类型
+		if 0 != v.ReqType {
+			request.SetReqType(v.ReqType)
+		}
+		request.SetLogicFailAttrs(v.LogicFailAttr)
+		// 模调配置
+		if 0 != v.ModuleID {
+			request.ModuleID = v.ModuleID
+		}
+		if 0 != v.InterfaceID {
+			request.InterfaceID = v.InterfaceID
+		}
+		// Monitor配置
+		if 0 != v.EnterAttr {
+			request.EnterAttr = v.EnterAttr
+		}
+		if 0 != v.SuccAttr {
+			request.SuccAttr = v.SuccAttr
+		}
+		if 0 != v.CommuFailAttr {
+			request.CommuFailAttr = v.CommuFailAttr
+		}
+		if 0 != v.ServiceFailAttr {
+			request.ServiceFailAttr = v.ServiceFailAttr
+		}
+		if 0 != v.CostAttr200 {
+			request.CostAttr200 = v.CostAttr200
+		}
+		if 0 != v.CostAttr800 {
+			request.CostAttr800 = v.CostAttr800
+		}
+		if 0 != v.CostAttr800p {
+			request.CostAttr800p = v.CostAttr800p
+		}
+	}
+	c.Request = request
+
 	return c
 }
 
-func WithPool(p transport.Pooler) Option {
-	return func(c *Client) {
-		c.pooler = p
+// Do client单次调用，并且返回错误error
+func (c *Client) Do(ctx context.Context, opt ...map[string]string) error {
+	c.DoRequest(ctx, opt...)
+	// 网络错误则优先返回error
+	if c.GetCommuErrCode() != 0 {
+		return GetThcErrorFromMsg(int32(c.GetCommuErrCode()), c.GetCommuErrMsg())
 	}
-}
-
-func WithDefualtPoll() Option {
-	return func(c *Client) {
-		c.pooler = transport.NewConnectionPool()
+	// 然后返回服务器错误
+	if c.GetServiceErrCode() != 0 {
+		return GetThcErrorFromMsg(int32(c.GetServiceErrCode()), c.GetServiceErrMsg())
 	}
+	return nil
 }
 
-func WithConnFactory(f transport.ConnFactory) Option {
-	return func(c *Client) {
-		c.connFactory = f
+// DoRequest client执行请求
+func (c *Client) DoRequest(ctx context.Context, opt ...map[string]string) {
+	// Local Service Name
+	if localServiceName, ok := ctx.Value(LocalServiceName).(string); ok {
+		c.Protocol.SetLocalServiceName(localServiceName)
+		c.authInfo.CallerInfo = localServiceName
 	}
-}
-
-// 对外的接口 1： 参数自动打包，直接传特定参数
-func (c *Client) Call(ctx context.Context, route string, req interface{}, rsp interface{}) (err error) {
-	log.Debug("client begin init context when request addr:%s", route)
-
-	// [step 1] 创建连接上下文
-	ct := transport.NewContext()
-
-	// [step 2] 设置请求协议参数，以及其他上下文参数
-	ct.Request = req
-	ct.Response = rsp
-
-	ct.RequestConn = protocol.NewRequest(route, req)
-	ct.ResponseConn = &protocol.Response{}
-	ct.ResponseConn.SetEncode(protocol.DefaultBodyCodec)
-	ct.ResponseConn.SetBody(rsp)
-
-	// [step 3] 开始
-	return c.listen(ctx, ct)
-}
-
-// 对外的接口 2：上下文手动写，所有东西都自己填
-func (c *Client) Do(ctx context.Context, ct *transport.Context) (err error) {
-	return c.listen(ctx, ct)
-}
-
-func (c *Client) listen(ctx context.Context, ct *transport.Context) (err error) {
-	res := &CallRes{
-		Done: make(chan struct{}),
+	// Trace ID
+	if traceID, ok := ctx.Value(TraceID).(string); ok {
+		c.Protocol.SetTraceID(traceID)
+		c.authInfo.TraceID = traceID
 	}
-
-	// [step 1] 开始发送
-	go func() {
-		log.Debug("client begin send,raw:%v", ct)
-		if err := c.send(ct, res); err != nil {
-			log.Error("client send failed, raw ctx:%v", ct)
-			return
+	// Remote Serivce Name
+	addrs := strings.Split(c.Address, "://")
+	if len(addrs) > 1 {
+		if addrs[0] == "l5" || addrs[0] == "cl5" || addrs[0] == "gl5" || addrs[0] == "nl5" {
+			l5 := strings.Split(addrs[1], ":")
+			if len(l5) == 2 {
+				c.authInfo.CalleeInfo = "l5-" + l5[0] + "-" + l5[1]
+			}
 		}
-	}()
-
-	// [step 2] 设置超时
-	select {
-	case <-ctx.Done():
-		return errors.New(fmt.Sprintf("send %s timeout", ct.RequestConn.Route))
-	case <-res.Done:
-		return res.Err
 	}
+	// Span ID
+	if spanID, ok := ctx.Value(SpanID).(uint64); ok {
+		c.Protocol.SetSpanID(spanID)
+	}
+	// parent Span ID
+	if parentSpanID, ok := ctx.Value(ParentSpanID).(uint64); ok {
+		c.Protocol.SetParentSpanID(parentSpanID)
+	}
+	// Flag
+	if flag, ok := ctx.Value(Flag).(uint32); ok {
+		c.Protocol.SetFlag(flag)
+	}
+	// Env
+	if env, ok := ctx.Value(Env).(string); ok {
+		c.Protocol.SetExtKv(Env, env)
+	}
+	// 自定义扩展首部
+	if len(opt) > 0 {
+		for k := range opt[0] {
+			c.Protocol.SetExtKv(k, opt[0][k])
+		}
+	}
+	DoRequests(ctx, c)
 }
 
-func (c *Client) send(ctx *transport.Context, res *CallRes) (err error) {
-	defer func() {
-		res.Err = err
-		res.Done <- struct{}{}
-		return
-	}()
-
-	route := ctx.RequestConn.Route
-
-	log.Debug("begin get addr %s when send", route)
-
-	// [step 1] 获取 ip:port
-	addr, err := c.getAddr(route)
-	if err != nil {
-		log.Error("server %s get addr failed, err:%s", route, err)
-		return
-	}
-
-	log.Debug("begin get conn from pool, server:%s, addr:%s", route, addr)
-
-	// [step 2] 然后从连接池中取一个连接
-	conn, err := c.pooler.Get(context.Background())
-	if err != nil {
-		log.Error("get conn addr %s failed, err:%s", addr, err)
-		return
-	}
-
-	// [setp 3] 设置 context 连接
-	ctx.SetConn(conn)
-
-	log.Debug("begin init connection context when request server: %s", route)
-
-	// [setp 4] 发送请求
-	if err = ctx.SendRequest(); err != nil {
-		return
-	}
-
-	log.Debug("begin read response, server:%s", route)
-
-	// [step 5] 读取响应
-	err = ctx.ReadResponse()
-
-	log.Debug("call server %s succ", route)
-
-	return
+// ReqBody 获取reqbody interface
+func (c *Client) ReqBody() interface{} {
+	return c.reqBody
 }
 
-// 支持两种格式
-// 1. ip://
-// 2. servername.funcname
-func (c *Client) getAddr(server string) (addr string, err error) {
-	log.Debug("client begin get server %s 's addr", server)
-
-	// [step 1] 如果是 ip，就直接走
-	ip, isIp := c.getIp(server)
-	if isIp {
-		log.Debug("%s is ip", server)
-		return ip, nil
-	}
-
-	log.Debug("%s is servername.funcname type", server)
-
-	t := server
-
-	// [step 2]  分割 server，格式为 servername.funcname, 如果不满足则失败
-	s := strings.Split(server, ".")
-	if len(s) == 1 {
-		t = server
-	} else if len(s) == 2 {
-		t = s[0]
-	} else {
-		log.Error("invalid server format, neet [servername.funcname] type, route:%s", server)
-		err = errors.New("invalid server format, neet [servername.funcname] type")
-		return
-	}
-
-	// [step 3] 如果是 servername 格式，就去中心服务发现
-	return c.discovery(t)
+// RspBody 获取rspbody interface
+func (c *Client) RspBody() interface{} {
+	return c.rspBody
 }
 
-func (c *Client) isIp(server string) bool {
-	_, isIp := c.getIp(server)
-	return isIp
+// Marshal 打包函数
+func (c *Client) Marshal() ([]byte, error) {
+	// if head, ok := c.Head.(*th.TmeHeader); ok {
+	// 	// tme协议打包
+	// 	bodyBuf, err := th.TMEBodyMarshal(head, c.reqBody)
+	// 	if err != nil {
+	// 		return bodyBuf, err
+	// 	}
+	// 	head.SetBodyLen(uint32(len(bodyBuf)))
+	// 	pkgBuf := make([]byte, head.Len()+head.GetBodyLen())
+	// 	headBuf, _ := head.Marshal()
+	// 	copy(pkgBuf[:head.Len()], headBuf)
+	// 	copy(pkgBuf[head.Len():], bodyBuf)
+	// 	return pkgBuf, nil
+	// }
+	// if head, ok := c.Head.(*th.QzaHeader); ok {
+	// 	// qza协议打包
+	// 	bodyBuf, err := th.QZABodyMarshal(head, c.reqBody)
+	// 	if err != nil {
+	// 		return bodyBuf, err
+	// 	}
+	// 	head.SetPackLen(uint32(head.GetHeadLen()) + uint32(len(bodyBuf)))
+	// 	headBuf, _ := head.Marshal()
+	// 	pkgBuf := make([]byte, head.GetPackLen())
+	// 	// buffer copy
+	// 	copy(pkgBuf[:head.GetPackLen()], headBuf)
+	// 	copy(pkgBuf[head.GetHeadLen():], bodyBuf)
+	// 	return pkgBuf, nil
+	// }
+	// if head, ok := c.Head.(*th.PduHeader); ok {
+	// 	// pdu协议打包
+	// 	bodyBuf, err := th.PDUBodyMarshal(head, c.reqBody)
+	// 	if err != nil {
+	// 		return bodyBuf, err
+	// 	}
+	// 	pkgLen := 2 + th.PduProtoHeaderSize + len(bodyBuf) // SOH + 包头 + 包体 + EOT 长度
+	// 	head.SetPackLen(uint32(pkgLen))
+	// 	headBuf, _ := head.Marshal()
+	// 	pkgBuf := make([]byte, pkgLen)
+	// 	// buffer copy
+	// 	pkgBuf[0] = byte(th.PDUSOH)
+	// 	copy(pkgBuf[1:1+th.PduProtoHeaderSize], headBuf)
+	// 	copy(pkgBuf[1+th.PduProtoHeaderSize:pkgLen-1], bodyBuf)
+	// 	pkgBuf[pkgLen-1] = byte(th.PDUEOT)
+	// 	return pkgBuf, nil
+	// }
+	return nil, fmt.Errorf("Client.Marshal(), invalid protocol")
 }
 
-// 格式校验例子如下：
-// ip://127.0.0.1:8080
-func (c *Client) getIp(server string) (ip string, isIp bool) {
-	// [step 1] 先校验长度
-	if len(server) <= 5 {
-		log.Debug("server %s 'length <= 5", server)
-		return "", false
-	}
-
-	// [step 2] 然后取 schema 和后面的
-	schema := server[:5]
-	last := server[5:]
-
-	log.Debug("schema: %s, last: %s", schema, last)
-
-	// [step 3] 校验协议
-	if schema != "ip://" {
-		log.Debug("shema %s not equal ip://", schema)
-		return "", false
-	}
-
-	// [step 3] 再分离 ip 和 port
-	s := strings.Split(last, ":")
-	if len(s) != 2 {
-		log.Debug("split %s error by :", last)
-		return "", false
-	}
-
-	i, err := strconv.Atoi(s[1])
-	if err != nil {
-		log.Debug("port %s not number", s[1])
-		return "", false
-	}
-
-	// [step 4] 最后总的校验 ip 和端口范围
-	isIp = net.ParseIP(s[0]) != nil && i >= 0 && i <= 65535
-	if isIp {
-		return last, true
-	}
-	return "", false
+// Unmarshal 解包函数
+func (c *Client) Unmarshal(data []byte) error {
+	// if head, ok := c.Head.(*th.TmeHeader); ok {
+	// 	// tme协议解包
+	// 	err := head.Unmarshal(data)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	c.ServiceErrCode = int(head.GetResultCode())
+	// 	if c.rspBody != nil && head.GetBodyLen() > 0 {
+	// 		return th.TMEBodyUnmarshal(head, data, c.rspBody)
+	// 	}
+	// 	return nil
+	// }
+	// if head, ok := c.Head.(*th.QzaHeader); ok {
+	// 	// qza协议解包
+	// 	err := head.Unmarshal(data)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	c.ServiceErrCode = int(head.GetResultCode())
+	// 	if c.rspBody != nil && head.GetBodyStartIndex() < int16(len(data)) {
+	// 		return th.QZABodyUnmarshal(head, data, c.rspBody)
+	// 	}
+	// 	return nil
+	// }
+	// if head, ok := c.Head.(*th.PduHeader); ok {
+	// 	// pdu协议解包
+	// 	err := head.Unmarshal(data)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	c.ServiceErrCode = int(head.GetResultCode())
+	// 	if c.rspBody != nil && len(data) > 25 {
+	// 		return th.PDUBodyUnmarshal(head, data, c.rspBody)
+	// 	}
+	// 	return nil
+	// }
+	return nil
 }
 
-// 服务发现
-// 给定请求服务名，然后负债均衡返回其中一个部署的机器 ip 地址
-// TODO: 每次响应一个 ip，那其他集群内怎么同步的？
-func (c *Client) discovery(route string) (addr string, err error) {
-	log.Debug("begin discovery %s", route)
+// GetLastCallee 获取被调服务信息
+func (c *Client) GetLastCallee() string {
+	return ""
+}
 
-	if route == "center" {
-		return contant.DefaultCenterAddress, nil
-	}
-
-	req := &center.DiscoveryRequest{
-		Server: route,
-	}
-	rsp := &center.DiscoveryResponse{}
-
-	if err = c.Call(context.Background(), contant.RouteDiscovery, req, rsp); err != nil {
-		log.Error("client discovery %s call failed, err:%s", route, err)
-		return
-	}
-
-	if rsp.Err != "" {
-		log.Error("client discovery %s server failed, err:%s", route, rsp.Err)
-		return "", errors.New(rsp.Err)
-	}
-
-	log.Debug("discovery route %s succ,res:%s", route, rsp.Addr)
-
-	addr = rsp.Addr
-
-	return
+// Check 包完整性校验
+func (c *Client) Check(data []byte) (int, error) {
+	return len(data), nil
 }
