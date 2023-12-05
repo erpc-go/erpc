@@ -9,34 +9,17 @@ import (
 
 // Conf common client conf
 type Conf struct {
-	Address         string
-	Network         string        `default:"udp"`
-	ReqType         int           `default:"1"`
-	Timeout         time.Duration `default:"800ms"`
-	Sidecar         bool          // 是否开启sidecar模式
-	Command         string        // 后端请求命令字
-	Password        string        // redis password
-	Test            int           // 配置是否测试环境
-	Bid             int           // ckv bid, tlist bid
-	Cid             int           // tlist cid
-	Db              int           // redis default connect db
-	ModuleID        int           // 模调被调模块id
-	InterfaceID     int           // 模调被调接口id
-	EnterAttr       int           // 进入量
-	SuccAttr        int           // 成功量
-	FailAttr        int           // 失败量
-	CommuFailAttr   int           // 网络失败量
-	ServiceFailAttr int           // 业务失败量
-	LogicFailAttr   [][]int       // 逻辑失败量
-	CostAttr10      int           // 耗时小于10ms的attr id
-	CostAttr30      int           // 耗时10-30ms的attr id
-	CostAttr50      int           // 耗时30-50ms的attr id
-	CostAttr70      int           // 耗时50-70ms的attr id
-	CostAttr100     int           // 耗时70-100ms的attr id
-	CostAttr150     int           // 耗时100-150ms的attr id
-	CostAttr200     int           // 耗时150-200ms的attr id
-	CostAttr800     int           // 耗时200-800ms的attr id
-	CostAttr800p    int           // 耗时大于800ms的attr id
+	Address  string
+	Network  string        `default:"udp"`
+	ReqType  int           `default:"1"`
+	Timeout  time.Duration `default:"800ms"`
+	Sidecar  bool          // 是否开启sidecar模式
+	Command  string        // 后端请求命令字
+	Password string        // redis password
+	Test     int           // 配置是否测试环境
+	Bid      int           // ckv bid, tlist bid
+	Cid      int           // tlist cid
+	Db       int           // redis default connect db
 }
 
 var (
@@ -61,24 +44,6 @@ type Request struct {
 	Sequence       uint32 // service packet sequence
 	ServiceErrCode int    // for monitor
 	ServiceErrMsg  string // for monitor
-
-	ModuleID    int // 模调被调模块id
-	InterfaceID int // 模调被调接口id
-
-	EnterAttr       int         // enter attr
-	SuccAttr        int         // network success attr
-	CommuFailAttr   int         // network fail attr
-	ServiceFailAttr int         // network fail attr
-	LogicFailAttr   map[int]int // logical fail attr , error code -> attr id
-	CostAttr10      int         // cost time 0 ~ 10ms
-	CostAttr30      int         // cost time 10 ~ 30ms
-	CostAttr50      int         // cost time 30 ~ 50ms
-	CostAttr70      int         // cost time 50 ~ 70ms
-	CostAttr100     int         // cost time 70 ~ 100ms
-	CostAttr150     int         // cost time 100 ~ 150ms
-	CostAttr200     int         // cost time 150 ~ 200ms
-	CostAttr800     int         // cost time 200 ~ 800ms
-	CostAttr800p    int         // cost time > 800ms
 
 	cl5Addr string // cl5寻址时，单独维护一份，防止一个req多次SetCl5HashKey
 }
@@ -205,33 +170,6 @@ func (r *Request) SetCl5HashKey(k uint64) {
 		}
 		r.Address = fmt.Sprintf("%s:%d", r.cl5Addr, k)
 	}
-}
-
-// SetLogicFailAttr set logic fail attr into map
-func (r *Request) SetLogicFailAttr(ec int, attrID int) {
-	if r.LogicFailAttr == nil {
-		r.LogicFailAttr = make(map[int]int, 0)
-	}
-	r.LogicFailAttr[ec] = attrID
-}
-
-// SetLogicFailAttrs set logic fail attr into map from slice
-func (r *Request) SetLogicFailAttrs(logicFailAttr [][]int) {
-	for _, v := range logicFailAttr {
-		if len(v) < 2 {
-			continue
-		}
-		r.SetLogicFailAttr(v[0], v[1])
-	}
-}
-
-// IsLogicFail return attr id and true or false
-func (r *Request) IsLogicFail(ec int) (int, bool) {
-	if r.LogicFailAttr == nil {
-		return 0, false
-	}
-	id, ok := r.LogicFailAttr[ec]
-	return id, ok
 }
 
 // String return err msg with ec addr cost
